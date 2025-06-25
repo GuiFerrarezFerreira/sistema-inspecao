@@ -91,7 +91,7 @@ function criarFuncionario() {
         
         $stmt = $db->prepare($query);
         
-        $senha_hash = password_hash($data->senha, PASSWORD_DEFAULT);
+        $senha_hash = $data->senha;
         
         $stmt->bindParam(":nome", $data->nome);
         $stmt->bindParam(":email", $data->email);
