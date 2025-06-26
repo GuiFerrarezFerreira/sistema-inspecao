@@ -328,3 +328,170 @@ button:hover {
         top: 0;
     }
 }
+
+/* Estilos adicionais para visualização de inspeção */
+.inspecao-header {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.inspecao-header h3 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+}
+
+.inspecao-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-label {
+    font-size: 12px;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.info-value {
+    font-size: 16px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.itens-inspecionados {
+    margin-top: 30px;
+}
+
+.item-resultado {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+}
+
+.item-resultado.ok {
+    border-left: 4px solid #2ecc71;
+}
+
+.item-resultado.problema {
+    border-left: 4px solid #e74c3c;
+}
+
+.item-info h4 {
+    margin: 0 0 5px 0;
+    color: #2c3e50;
+}
+
+.item-info p {
+    margin: 5px 0;
+    color: #7f8c8d;
+    font-size: 14px;
+}
+
+.item-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-badge {
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.status-badge.ok {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-badge.problema {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.qr-indicator {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.observacoes-box {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 4px;
+}
+
+.observacoes-gerais {
+    background-color: #e7f3ff;
+    border: 1px solid #b8daff;
+    padding: 15px;
+    margin-top: 20px;
+    border-radius: 8px;
+}
+
+.resumo-inspecao {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+}
+
+.resumo-item {
+    text-align: center;
+}
+
+.resumo-numero {
+    font-size: 32px;
+    font-weight: bold;
+    color: #3498db;
+}
+
+.resumo-label {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+.btn-imprimir {
+    background-color: #9b59b6;
+    margin-top: 20px;
+}
+
+.btn-imprimir:hover {
+    background-color: #8e44ad;
+}
+
+@media print {
+    .modal {
+        position: static;
+        background: none;
+    }
+    
+    .modal-content {
+        box-shadow: none;
+        margin: 0;
+        max-width: 100%;
+    }
+    
+    .close, .btn-imprimir {
+        display: none;
+    }
+}

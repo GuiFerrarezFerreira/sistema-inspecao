@@ -41,6 +41,7 @@ $usuario_id = $_SESSION['usuario_id'];
                     <button class="tab" onclick="showTab('itens')">Itens</button>
                     <button class="tab" onclick="showTab('checklists')">Checklists</button>
                     <button class="tab" onclick="showTab('relatorios')">Relatórios</button>
+                    <button class="tab" onclick="showTab('inspecoes')">Inspeções</button>                    
                 </div>
 
                 <!-- Tab Funcionários -->
@@ -82,6 +83,41 @@ $usuario_id = $_SESSION['usuario_id'];
                     </div>
                     <div id="relatorioContent"></div>
                 </div>
+
+                <!-- Tab Inspeções - Adicionar após a tab de Checklists -->
+                <div id="tab-inspecoes" class="tab-content">
+                    <h2>Inspeções Realizadas</h2>
+                    
+                    <div class="filtros-inspecao" style="margin-bottom: 20px;">
+                        <div class="form-group" style="display: inline-block; margin-right: 15px;">
+                            <label>Funcionário:</label>
+                            <select id="filtroFuncionario" onchange="carregarInspecoes()">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: inline-block; margin-right: 15px;">
+                            <label>Armazém:</label>
+                            <select id="filtroArmazem" onchange="carregarInspecoes()">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: inline-block; margin-right: 15px;">
+                            <label>Status:</label>
+                            <select id="filtroStatus" onchange="carregarInspecoes()">
+                                <option value="">Todos</option>
+                                <option value="concluida">Concluída</option>
+                                <option value="em_andamento">Em Andamento</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: inline-block;">
+                            <label>Período:</label>
+                            <input type="date" id="filtroDataInicio" onchange="carregarInspecoes()">
+                            <input type="date" id="filtroDataFim" onchange="carregarInspecoes()">
+                        </div>
+                    </div>
+                    
+                    <div id="inspecoesList" class="grid"></div>
+                </div>                
             </div>
             <?php else: ?>
             <!-- Área do Funcionário -->
@@ -221,6 +257,18 @@ $usuario_id = $_SESSION['usuario_id'];
             </form>
         </div>
     </div>
+
+
+<!-- Modal Visualizar Inspeção -->
+<div id="modalVisualizarInspecao" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('modalVisualizarInspecao')">&times;</span>
+        <h2>Detalhes da Inspeção</h2>
+        <div id="detalhesInspecao">
+            <!-- Conteúdo será carregado dinamicamente -->
+        </div>
+    </div>
+</div>    
     <?php endif; ?>
 
     <!-- Modal Realizar Inspeção -->

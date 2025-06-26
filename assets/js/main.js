@@ -155,12 +155,13 @@ document.getElementById('formChecklist')?.addEventListener('submit', async (e) =
     }
 });
 
-// Funções de carregamento de dados
+// Atualizar a função carregarDados para incluir inspeções
 function carregarDados() {
     carregarFuncionarios();
     carregarArmazens();
     carregarItens();
     carregarChecklists();
+    carregarInspecoes(); // Adicionar esta linha
 }
 
 async function carregarFuncionarios() {
@@ -719,6 +720,247 @@ async function excluirChecklist(id) {
     }
 }
 
+
+// Função para carregar lista de inspeções (admin)
+async function carregarInspecoes() {
+    try {
+        const response = await fetch('api/inspecoes.php');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            // Aplicar filtros
+            let inspecoes = result.data;
+            
+            const filtroFuncionario = document.getElementById('filtroFuncionario')?.value;
+            const filtroArmazem = document.getElementById('filtroArmazem')?.value;
+            const filtroStatus = document.getElementById('filtroStatus')?.value;
+            const filtroDataInicio = document.getElementById('filtroDataInicio')?.value;
+            const filtroDataFim = document.getElementById('filtroDataFim')?.value;
+            
+            if (filtroFuncionario) {
+                inspecoes = inspecoes.filter(i => i.funcionario_nome === filtroFuncionario);
+            }
+            
+            if (filtroArmazem) {
+                inspecoes = inspecoes.filter(i => i.armazem_nome === filtroArmazem);
+            }
+            
+            if (filtroStatus) {
+                inspecoes = inspecoes.filter(i => i.status === filtroStatus);
+            }
+            
+            if (filtroDataInicio) {
+                inspecoes = inspecoes.filter(i => i.data_inicio >= filtroDataInicio);
+            }
+            
+            if (filtroDataFim) {
+                inspecoes = inspecoes.filter(i => i.data_inicio <= filtroDataFim + ' 23:59:59');
+            }
+            
+            const html = inspecoes.map(i => {
+                const statusClass = i.status === 'concluida' ? 'alert-success' : 'alert-info';
+                const statusText = i.status === 'concluida' ? 'Concluída' : 'Em Andamento';
+                const conformidade = i.total_itens_verificados > 0 
+                    ? Math.round(((i.total_itens_verificados - i.total_problemas) / i.total_itens_verificados) * 100)
+                    : 0;
+                
+                return `
+                    <div class="card">
+                        <h3>${i.checklist_nome}</h3>
+                        <p><strong>Armazém:</strong> ${i.armazem_nome}</p>
+                        <p><strong>Funcionário:</strong> ${i.funcionario_nome}</p>
+                        <p><strong>Início:</strong> ${formatarDataHora(i.data_inicio)}</p>
+                        ${i.data_fim ? `<p><strong>Fim:</strong> ${formatarDataHora(i.data_fim)}</p>` : ''}
+                        <div class="alert ${statusClass}" style="margin: 10px 0;">${statusText}</div>
+                        ${i.total_itens_verificados > 0 ? `
+                            <div style="margin: 10px 0;">
+                                <p><strong>Itens Verificados:</strong> ${i.total_itens_verificados}</p>
+                                <p><strong>Problemas Encontrados:</strong> ${i.total_problemas}</p>
+                                <p><strong>Taxa de Conformidade:</strong> ${conformidade}%</p>
+                            </div>
+                        ` : ''}
+                        <button onclick="visualizarInspecao(${i.id})" class="btn-primary">
+                            Visualizar Detalhes
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('inspecoesList').innerHTML = html || '<p>Nenhuma inspeção encontrada.</p>';
+            
+            // Atualizar filtros se necessário
+            atualizarFiltrosInspecao(result.data);
+        }
+    } catch (error) {
+        console.error('Erro ao carregar inspeções:', error);
+    }
+}
+
+// Função para visualizar detalhes de uma inspeção
+async function visualizarInspecao(inspecaoId) {
+    try {
+        const response = await fetch(`api/inspecao-detalhes.php?id=${inspecaoId}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const data = result.data;
+            const inspecao = data.inspecao;
+            const resumo = data.resumo;
+            const itens = data.itens;
+            
+            const duracaoText = inspecao.duracao 
+                ? `${inspecao.duracao.horas}h ${inspecao.duracao.minutos}min`
+                : 'Em andamento';
+            
+            const html = `
+                <div class="inspecao-header">
+                    <h3>${inspecao.checklist_nome}</h3>
+                    <div class="inspecao-info">
+                        <div class="info-item">
+                            <span class="info-label">Armazém</span>
+                            <span class="info-value">${inspecao.armazem.nome} (${inspecao.armazem.codigo})</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Localização</span>
+                            <span class="info-value">${inspecao.armazem.localizacao}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Funcionário</span>
+                            <span class="info-value">${inspecao.funcionario.nome}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Cargo</span>
+                            <span class="info-value">${inspecao.funcionario.cargo}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Data/Hora Início</span>
+                            <span class="info-value">${formatarDataHora(inspecao.data_inicio)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Data/Hora Fim</span>
+                            <span class="info-value">${inspecao.data_fim ? formatarDataHora(inspecao.data_fim) : '-'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Duração</span>
+                            <span class="info-value">${duracaoText}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Periodicidade</span>
+                            <span class="info-value">${capitalize(inspecao.periodicidade)}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="resumo-inspecao">
+                    <div class="resumo-item">
+                        <div class="resumo-numero">${resumo.total_itens}</div>
+                        <div class="resumo-label">Total de Itens</div>
+                    </div>
+                    <div class="resumo-item">
+                        <div class="resumo-numero" style="color: #2ecc71;">${resumo.itens_ok}</div>
+                        <div class="resumo-label">Itens OK</div>
+                    </div>
+                    <div class="resumo-item">
+                        <div class="resumo-numero" style="color: #e74c3c;">${resumo.itens_problema}</div>
+                        <div class="resumo-label">Problemas</div>
+                    </div>
+                    <div class="resumo-item">
+                        <div class="resumo-numero" style="color: #3498db;">${resumo.taxa_conformidade}%</div>
+                        <div class="resumo-label">Conformidade</div>
+                    </div>
+                </div>
+                
+                <div class="itens-inspecionados">
+                    <h4>Itens Inspecionados</h4>
+                    ${itens.map(item => `
+                        <div class="item-resultado ${item.status}">
+                            <div class="item-info">
+                                <h4>${item.item_nome}</h4>
+                                ${item.item_descricao ? `<p>${item.item_descricao}</p>` : ''}
+                                ${item.criterios_inspecao ? `<p><strong>Critérios:</strong> ${item.criterios_inspecao}</p>` : ''}
+                                <p class="qr-indicator">
+                                    ${item.qr_code_lido ? '✓ QR Code escaneado' : '⚠ QR Code não escaneado'}
+                                </p>
+                                ${item.observacoes ? `
+                                    <div class="observacoes-box">
+                                        <strong>Observações:</strong> ${item.observacoes}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="item-status">
+                                <span class="status-badge ${item.status}">
+                                    ${item.status === 'ok' ? '✓ OK' : '✗ Problema'}
+                                </span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                ${inspecao.observacoes_gerais ? `
+                    <div class="observacoes-gerais">
+                        <h4>Observações Gerais</h4>
+                        <p>${inspecao.observacoes_gerais}</p>
+                    </div>
+                ` : ''}
+                
+                <!-- <button onclick="imprimirInspecao()" class="btn-imprimir">Imprimir Relatório</button> -->
+            `;
+            
+            document.getElementById('detalhesInspecao').innerHTML = html;
+            showModal('modalVisualizarInspecao');
+        }
+    } catch (error) {
+        console.error('Erro ao carregar detalhes da inspeção:', error);
+        alert('Erro ao carregar detalhes da inspeção');
+    }
+}
+
+// Função auxiliar para formatar data e hora
+function formatarDataHora(dataHora) {
+    if (!dataHora) return '-';
+    const data = new Date(dataHora);
+    return data.toLocaleString('pt-BR');
+}
+
+// Função auxiliar para capitalizar texto
+function capitalize(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// Função para imprimir relatório de inspeção
+function imprimirInspecao() {
+    window.print();
+}
+
+// Função para atualizar filtros de inspeção
+function atualizarFiltrosInspecao(inspecoes) {
+    // Extrair valores únicos para os filtros
+    const funcionarios = [...new Set(inspecoes.map(i => i.funcionario_nome))];
+    const armazens = [...new Set(inspecoes.map(i => i.armazem_nome))];
+    
+    // Atualizar select de funcionários
+    const selectFuncionario = document.getElementById('filtroFuncionario');
+    if (selectFuncionario && selectFuncionario.options.length <= 1) {
+        funcionarios.forEach(f => {
+            const option = document.createElement('option');
+            option.value = f;
+            option.textContent = f;
+            selectFuncionario.appendChild(option);
+        });
+    }
+    
+    // Atualizar select de armazéns
+    const selectArmazem = document.getElementById('filtroArmazem');
+    if (selectArmazem && selectArmazem.options.length <= 1) {
+        armazens.forEach(a => {
+            const option = document.createElement('option');
+            option.value = a;
+            option.textContent = a;
+            selectArmazem.appendChild(option);
+        });
+    }
+}
+
 // Funções de edição (a serem implementadas)
 function editarFuncionario(id) {
     alert('Função de edição será implementada');
@@ -742,3 +984,7 @@ window.onclick = function(event) {
         event.target.style.display = 'none';
     }
 };
+
+
+
+
