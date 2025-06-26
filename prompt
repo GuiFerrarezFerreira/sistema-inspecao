@@ -1,0 +1,23 @@
+Crie um sistema para que os responsáveis de cada armazem realizem o checklist de inspeção, onde lerão o QRCODE através de seus usuários no celular e responderão se há algo faltante ou danificado.
+
+O gestor da area deve ter um usuario admin para:
+	- Cadastrar os funcionarios que irão utilizar o sistema
+	- Cadastrar os armazens
+	- Cadastrar os itens que devem ser inspecionado dentro de cada armazem
+	- Criar o checklist indicando:
+		- o armazem
+		- os itens disponiveis que devem ser inspecionados dentro do armazem
+		- a periodicidade do checklist (diario, semanal, mensal e anual)
+		- o funcionario responsavel por realizar o checklist
+
+OBS: Após o gestor criar o checklist o sistema deve gerar um QR Code para cada item que será inspecionado para que o gestor realize a impressão desse item e cole na parede		
+
+O funcionario responsavel pelo o armazem deve:
+	- Realizar o checklist dentro do periodo indicado pelo gestor
+	- Ler o QR Code em cada item do checklist e indicar se há algo faltante ou danificado no item	  
+
+
+O sistema deve ser escrito em HTML, CSS, JS e PHP.
+
+O banco de dados deve ser em mysql.
+
