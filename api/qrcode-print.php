@@ -73,7 +73,7 @@ if (count($items) == 0) {
         }
         
         .qr-grid {
-            display: grid;
+            display: grid; 
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 20px;
         }
@@ -81,6 +81,7 @@ if (count($items) == 0) {
         .qr-container {
             border: 2px solid #333;
             padding: 20px;
+            margin: 20px;
             text-align: center;
             background: white;
         }
@@ -104,7 +105,7 @@ if (count($items) == 0) {
         }
         
         .criterios {
-            text-align: left;
+            text-align: center;
             font-size: 11px;
             margin-top: 10px;
             padding-top: 10px;
@@ -165,8 +166,8 @@ if (count($items) == 0) {
         <?php foreach ($items as $index => $item): ?>
         new QRCode(document.getElementById("qr-<?php echo $index; ?>"), {
             text: '<?php echo $item['qr_code_data']; ?>',
-            width: 200,
-            height: 200,
+            width: 220,
+            height: 220,
             colorDark : "#000000",
             colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.H

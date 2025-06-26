@@ -217,6 +217,12 @@ async function carregarArmazens() {
                 selectArmazem.innerHTML = '<option value="">Selecione...</option>' +
                     result.data.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
             }
+
+            const selectArmazem2 = document.querySelector('select[id="armazem_id"]');
+            if (selectArmazem2) {
+                selectArmazem2.innerHTML = '<option value="">Selecione...</option>' +
+                    result.data.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+            }            
         }
     } catch (error) {
         console.error('Erro ao carregar armazéns:', error);
@@ -638,7 +644,7 @@ async function excluirFuncionario(id) {
             
             const result = await response.json();
             if (result.success) {
-                alert('Funcionário excluído com sucesso!');
+                alert('Funcionário excluído com sucess0o!');
                 carregarFuncionarios();
             }
         } catch (error) {

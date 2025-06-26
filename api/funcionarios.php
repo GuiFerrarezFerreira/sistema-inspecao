@@ -34,7 +34,7 @@ function listarFuncionarios() {
     global $db;
     
     $query = "SELECT id, nome, email, usuario, tipo, cargo, ativo, criado_em 
-              FROM usuarios 
+              FROM usuarios WHERE ativo = 1
               ORDER BY nome";
     
     $stmt = $db->prepare($query);

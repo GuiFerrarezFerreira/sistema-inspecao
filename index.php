@@ -194,7 +194,7 @@ $usuario_id = $_SESSION['usuario_id'];
                 </div>
                 <div class="form-group">
                     <label>Armazém:</label>
-                    <select name="armazem_id" required onchange="carregarItensArmazem(this.value)">
+                    <select id="armazem_id" name="armazem_id" required onchange="carregarItensArmazem(this.value)">
                         <option value="">Selecione...</option>
                     </select>
                 </div>
