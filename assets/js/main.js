@@ -613,12 +613,22 @@ async function marcarStatus(itemId, status) {
 async function finalizarInspecao(inspecaoId) {
     const itens = document.querySelectorAll('.checklist-item');
     const resultados = [];
+    let temProblema = false;
+    let problemaSemObservacao = false;
 
     itens.forEach(item => {
         const itemId = item.id.split('-')[1];
-        const status = item.classList.contains('status-ok') ? 'ok' : 
-                     item.classList.contains('status-problem') ? 'problema' : null;
+        const status = item.classList.contains('status-problem') ? 'problema' : 
+        item.classList.contains('status-ok') ? 'ok' : null;
         const observacao = document.querySelector(`#observacao-${itemId} textarea`)?.value || '';
+        
+        // Verificar se há problema sem observação
+        if (status === 'problema') {
+            temProblema = true;
+            if (!observacao.trim()) {
+                problemaSemObservacao = true;
+            }
+        }
         
         // Coletar critérios marcados
         const criteriosChecados = {};
@@ -637,9 +647,23 @@ async function finalizarInspecao(inspecaoId) {
         }
     });
 
-    if (resultados.length === 0) {
+    /* if (resultados.length === 0) {
         alert('Por favor, inspecione pelo menos um item!');
         return;
+    } */
+
+    // Verificar se há problemas sem observação
+    if (problemaSemObservacao) {
+        alert('Por favor, descreva todos os problemas encontrados nas observações!');
+        return;
+    }
+
+    // Confirmar finalização se houver problemas
+    if (temProblema) {
+        const confirmar = confirm('Foram encontrados problemas na inspeção. Deseja realmente finalizar?');
+        if (!confirmar) {
+            return;
+        }
     }
 
     try {
