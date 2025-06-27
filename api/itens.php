@@ -37,7 +37,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
 function listarItens() {
     global $db;
     
-    $query = "SELECT i.id, i.nome, i.descricao, i.criterios_inspecao, i.ativo, i.criado_em,
+    $query = "SELECT i.id, i.nome, i.descricao, i.ativo, i.criado_em,
                      a.nome as armazem_nome, a.id as armazem_id
               FROM itens_inspecao i
               INNER JOIN armazens a ON i.armazem_id = a.id
@@ -50,13 +50,16 @@ function listarItens() {
     $itens = array();
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        // Buscar critérios para cada item
+        $criterios = buscarCriteriosItem($row['id']);
+        
         $itens[] = array(
             "id" => $row['id'],
             "nome" => $row['nome'],
             "descricao" => $row['descricao'],
-            "criterios_inspecao" => $row['criterios_inspecao'],
             "armazem_id" => $row['armazem_id'],
             "armazem_nome" => $row['armazem_nome'],
+            "criterios" => $criterios,
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
         );
@@ -68,7 +71,7 @@ function listarItens() {
 function listarItensPorArmazem($armazem_id) {
     global $db;
     
-    $query = "SELECT id, nome, descricao, criterios_inspecao, ativo, criado_em
+    $query = "SELECT id, nome, descricao, ativo, criado_em
               FROM itens_inspecao
               WHERE armazem_id = :armazem_id AND ativo = TRUE
               ORDER BY nome";
@@ -80,17 +83,44 @@ function listarItensPorArmazem($armazem_id) {
     $itens = array();
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        // Buscar critérios para cada item
+        $criterios = buscarCriteriosItem($row['id']);
+        
         $itens[] = array(
             "id" => $row['id'],
             "nome" => $row['nome'],
             "descricao" => $row['descricao'],
-            "criterios_inspecao" => $row['criterios_inspecao'],
+            "criterios" => $criterios,
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
         );
     }
     
     enviarResposta(true, "Itens do armazém listados com sucesso", $itens);
+}
+
+function buscarCriteriosItem($item_id) {
+    global $db;
+    
+    $query = "SELECT id, descricao, ordem 
+              FROM criterios_inspecao 
+              WHERE item_id = :item_id AND ativo = TRUE 
+              ORDER BY ordem, id";
+    
+    $stmt = $db->prepare($query);
+    $stmt->bindParam(":item_id", $item_id);
+    $stmt->execute();
+    
+    $criterios = array();
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $criterios[] = array(
+            "id" => $row['id'],
+            "descricao" => $row['descricao'],
+            "ordem" => $row['ordem']
+        );
+    }
+    
+    return $criterios;
 }
 
 function criarItem() {
@@ -112,22 +142,41 @@ function criarItem() {
             throw new Exception("Armazém não encontrado");
         }
         
+        $db->beginTransaction();
+        
         // Criar item
-        $query = "INSERT INTO itens_inspecao (armazem_id, nome, descricao, criterios_inspecao) 
-                  VALUES (:armazem_id, :nome, :descricao, :criterios)";
+        $query = "INSERT INTO itens_inspecao (armazem_id, nome, descricao) 
+                  VALUES (:armazem_id, :nome, :descricao)";
         
         $stmt = $db->prepare($query);
         
         $descricao = isset($data->descricao) ? $data->descricao : null;
-        $criterios = isset($data->criterios) ? $data->criterios : null;
         
         $stmt->bindParam(":armazem_id", $data->armazem_id);
         $stmt->bindParam(":nome", $data->nome);
         $stmt->bindParam(":descricao", $descricao);
-        $stmt->bindParam(":criterios", $criterios);
         
         if ($stmt->execute()) {
             $item_id = $db->lastInsertId();
+            
+            // Adicionar critérios
+            if (isset($data->criterios) && is_array($data->criterios)) {
+                $query_criterio = "INSERT INTO criterios_inspecao (item_id, descricao, ordem) 
+                                   VALUES (:item_id, :descricao, :ordem)";
+                $stmt_criterio = $db->prepare($query_criterio);
+                
+                foreach ($data->criterios as $index => $criterio) {
+                    if (!empty(trim($criterio))) {
+                        $stmt_criterio->bindParam(":item_id", $item_id);
+                        $stmt_criterio->bindParam(":descricao", $criterio);
+                        $stmt_criterio->bindValue(":ordem", $index);
+                        $stmt_criterio->execute();
+                    }
+                }
+            }
+            
+            $db->commit();
+            
             registrarLog($db, $usuario_id, 'CRIAR_ITEM', 'Item de inspeção criado: ' . $data->nome, 'itens_inspecao', $item_id);
             
             enviarResposta(true, "Item criado com sucesso", array("id" => $item_id));
@@ -136,6 +185,7 @@ function criarItem() {
         }
         
     } catch (Exception $e) {
+        $db->rollBack();
         http_response_code(400);
         enviarResposta(false, $e->getMessage());
     }
@@ -161,23 +211,47 @@ function atualizarItem() {
             throw new Exception("Armazém não encontrado");
         }
         
+        $db->beginTransaction();
+        
         // Atualizar item
         $query = "UPDATE itens_inspecao 
-                  SET armazem_id = :armazem_id, nome = :nome, descricao = :descricao, criterios_inspecao = :criterios 
+                  SET armazem_id = :armazem_id, nome = :nome, descricao = :descricao 
                   WHERE id = :id";
         
         $stmt = $db->prepare($query);
         
         $descricao = isset($data->descricao) ? $data->descricao : null;
-        $criterios = isset($data->criterios) ? $data->criterios : null;
         
         $stmt->bindParam(":armazem_id", $data->armazem_id);
         $stmt->bindParam(":nome", $data->nome);
         $stmt->bindParam(":descricao", $descricao);
-        $stmt->bindParam(":criterios", $criterios);
         $stmt->bindParam(":id", $data->id);
         
         if ($stmt->execute()) {
+            // Desativar critérios antigos
+            $query_desativar = "UPDATE criterios_inspecao SET ativo = FALSE WHERE item_id = :item_id";
+            $stmt_desativar = $db->prepare($query_desativar);
+            $stmt_desativar->bindParam(":item_id", $data->id);
+            $stmt_desativar->execute();
+            
+            // Adicionar novos critérios
+            if (isset($data->criterios) && is_array($data->criterios)) {
+                $query_criterio = "INSERT INTO criterios_inspecao (item_id, descricao, ordem) 
+                                   VALUES (:item_id, :descricao, :ordem)";
+                $stmt_criterio = $db->prepare($query_criterio);
+                
+                foreach ($data->criterios as $index => $criterio) {
+                    if (!empty(trim($criterio))) {
+                        $stmt_criterio->bindParam(":item_id", $data->id);
+                        $stmt_criterio->bindParam(":descricao", $criterio);
+                        $stmt_criterio->bindValue(":ordem", $index);
+                        $stmt_criterio->execute();
+                    }
+                }
+            }
+            
+            $db->commit();
+            
             registrarLog($db, $usuario_id, 'ATUALIZAR_ITEM', 'Item de inspeção atualizado: ' . $data->nome, 'itens_inspecao', $data->id);
             
             enviarResposta(true, "Item atualizado com sucesso");
@@ -186,6 +260,7 @@ function atualizarItem() {
         }
         
     } catch (Exception $e) {
+        $db->rollBack();
         http_response_code(400);
         enviarResposta(false, $e->getMessage());
     }
@@ -210,6 +285,14 @@ function excluirItem() {
             throw new Exception("Não é possível excluir o item pois está sendo usado em checklists");
         }
         
+        $db->beginTransaction();
+        
+        // Desativar critérios
+        $query_criterios = "UPDATE criterios_inspecao SET ativo = FALSE WHERE item_id = :id";
+        $stmt_criterios = $db->prepare($query_criterios);
+        $stmt_criterios->bindParam(":id", $data->id);
+        $stmt_criterios->execute();
+        
         // Não excluir fisicamente, apenas desativar
         $query = "UPDATE itens_inspecao SET ativo = FALSE WHERE id = :id";
         
@@ -217,6 +300,8 @@ function excluirItem() {
         $stmt->bindParam(":id", $data->id);
         
         if ($stmt->execute()) {
+            $db->commit();
+            
             registrarLog($db, $usuario_id, 'EXCLUIR_ITEM', 'Item de inspeção desativado', 'itens_inspecao', $data->id);
             
             enviarResposta(true, "Item excluído com sucesso");
@@ -225,6 +310,7 @@ function excluirItem() {
         }
         
     } catch (Exception $e) {
+        $db->rollBack();
         http_response_code(400);
         enviarResposta(false, $e->getMessage());
     }

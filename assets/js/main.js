@@ -4,6 +4,7 @@
 let scanner = null;
 let currentChecklistId = null;
 let currentItemId = null;
+let criteriosContador = 0;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
@@ -28,10 +29,36 @@ function showTab(tabName) {
 
 function showModal(modalId) {
     document.getElementById(modalId).style.display = 'block';
+    
+    // Se for o modal de item, resetar critérios
+    if (modalId === 'modalItem') {
+        criteriosContador = 0;
+        document.getElementById('criteriosContainer').innerHTML = '';
+        adicionarCriterio();
+    }
 }
 
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
+}
+
+// Funções para critérios
+function adicionarCriterio() {
+    const container = document.getElementById('criteriosContainer');
+    const div = document.createElement('div');
+    div.className = 'criterio-item';
+    div.innerHTML = `
+        <input type="text" name="criterios[]" placeholder="Ex: Verificar integridade física" style="width: calc(100% - 40px);">
+        <button type="button" onclick="removerCriterio(this)" class="btn-danger" style="width: 30px; padding: 5px;">×</button>
+    `;
+    container.appendChild(div);
+    criteriosContador++;
+}
+
+function removerCriterio(button) {
+    if (document.querySelectorAll('.criterio-item').length > 1) {
+        button.parentElement.remove();
+    }
 }
 
 // Funções de formulários
@@ -93,6 +120,15 @@ document.getElementById('formItem')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData);
+    
+    // Coletar critérios
+    const criterios = [];
+    document.querySelectorAll('input[name="criterios[]"]').forEach(input => {
+        if (input.value.trim()) {
+            criterios.push(input.value.trim());
+        }
+    });
+    data.criterios = criterios;
 
     try {
         const response = await fetch('api/itens.php', {
@@ -161,7 +197,7 @@ function carregarDados() {
     carregarArmazens();
     carregarItens();
     carregarChecklists();
-    carregarInspecoes(); // Adicionar esta linha
+    carregarInspecoes();
 }
 
 async function carregarFuncionarios() {
@@ -241,7 +277,12 @@ async function carregarItens() {
                     <h3>${i.nome}</h3>
                     <p>Armazém: ${i.armazem_nome}</p>
                     ${i.descricao ? `<p>Descrição: ${i.descricao}</p>` : ''}
-                    ${i.criterios_inspecao ? `<p>Critérios: ${i.criterios_inspecao}</p>` : ''}
+                    ${i.criterios && i.criterios.length > 0 ? `
+                        <p><strong>Critérios de Inspeção:</strong></p>
+                        <ul style="margin-left: 20px;">
+                            ${i.criterios.map(c => `<li>${c.descricao}</li>`).join('')}
+                        </ul>
+                    ` : ''}
                     <div class="actions">
                         <button onclick="editarItem(${i.id})">Editar</button>
                         <button onclick="excluirItem(${i.id})" class="btn-danger">Excluir</button>
@@ -397,10 +438,27 @@ async function iniciarInspecao(checklistId) {
                     Escaneie o QR Code de cada item para realizar a inspeção
                 </div>
                 ${itens.map(item => `
-                    <div class="checklist-item" id="item-${item.item_id}" data-inspecao="${inspecaoId}">
+                    <div class="checklist-item ${item.status ? `status-${item.status}` : ''}" id="item-${item.item_id}" data-inspecao="${inspecaoId}">
                         <h4>${item.nome}</h4>
                         ${item.descricao ? `<p>${item.descricao}</p>` : ''}
-                        ${item.criterios ? `<p><strong>Critérios:</strong> ${item.criterios}</p>` : ''}
+                        
+                        ${item.criterios && item.criterios.length > 0 ? `
+                            <div class="criterios-container" style="margin: 10px 0;">
+                                <p><strong>Critérios de Inspeção:</strong></p>
+                                ${item.criterios.map(c => `
+                                    <label style="display: block; margin: 5px 0;">
+                                        <input type="checkbox" 
+                                               class="criterio-checkbox" 
+                                               data-criterio-id="${c.id}"
+                                               data-item-id="${item.item_id}"
+                                               ${c.checado ? 'checked' : ''}
+                                               ${!item.status ? 'disabled' : ''}>
+                                        ${c.descricao}
+                                    </label>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
                         <button onclick="abrirScanner(${item.item_id})" class="btn-primary">
                             Escanear QR Code
                         </button>
@@ -412,7 +470,7 @@ async function iniciarInspecao(checklistId) {
                                 ✗ Com Problema
                             </button>
                         </div>
-                        <div id="observacao-${item.item_id}" style="${item.status === 'problema' ? 'display: block;' : 'display: none;'} margin-top: 10px;">
+                        <div id="observacao-${item.item_id}" style="display: block; margin-top: 10px;">
                             <textarea placeholder="Descreva o problema..." rows="3" style="width: 100%">${item.observacoes || ''}</textarea>
                         </div>
                     </div>
@@ -424,14 +482,6 @@ async function iniciarInspecao(checklistId) {
 
             document.getElementById('inspecaoContent').innerHTML = html;
             showModal('modalInspecao');
-            
-            // Marcar itens já inspecionados
-            itens.forEach(item => {
-                if (item.status) {
-                    const itemEl = document.getElementById(`item-${item.item_id}`);
-                    itemEl.classList.add(`status-${item.status}`);
-                }
-            });
         }
     } catch (error) {
         console.error('Erro ao iniciar inspeção:', error);
@@ -468,6 +518,10 @@ async function iniciarScanner() {
         closeScanner();
         // Liberar item para inspeção manual
         document.getElementById(`status-${currentItemId}`).style.display = 'flex';
+        // Habilitar checkboxes dos critérios
+        document.querySelectorAll(`#item-${currentItemId} .criterio-checkbox`).forEach(cb => {
+            cb.disabled = false;
+        });
     }
 }
 
@@ -504,6 +558,10 @@ async function processarQRCode(data) {
         const result = await response.json();
         if (result.success && result.data.item_id == currentItemId) {
             document.getElementById(`status-${currentItemId}`).style.display = 'flex';
+            // Habilitar checkboxes dos critérios
+            document.querySelectorAll(`#item-${currentItemId} .criterio-checkbox`).forEach(cb => {
+                cb.disabled = false;
+            });
         } else {
             alert('QR Code não corresponde ao item selecionado!');
         }
@@ -519,11 +577,17 @@ async function marcarStatus(itemId, status) {
     item.classList.remove('status-ok', 'status-problem');
     item.classList.add(`status-${status}`);
     
-    if (status === 'problema') {
+    /* if (status === 'problema') {
         document.getElementById(`observacao-${itemId}`).style.display = 'block';
     } else {
         document.getElementById(`observacao-${itemId}`).style.display = 'none';
-    }
+    } */
+    
+    // Coletar critérios marcados
+    const criteriosChecados = {};
+    document.querySelectorAll(`#item-${itemId} .criterio-checkbox`).forEach(cb => {
+        criteriosChecados[cb.dataset.criterioId] = cb.checked;
+    });
     
     // Salvar status
     try {
@@ -537,7 +601,8 @@ async function marcarStatus(itemId, status) {
                 item_id: itemId,
                 status: status,
                 observacoes: observacoes,
-                qr_code_lido: true
+                qr_code_lido: true,
+                criterios_checados: criteriosChecados
             })
         });
     } catch (error) {
@@ -554,13 +619,20 @@ async function finalizarInspecao(inspecaoId) {
         const status = item.classList.contains('status-ok') ? 'ok' : 
                      item.classList.contains('status-problem') ? 'problema' : null;
         const observacao = document.querySelector(`#observacao-${itemId} textarea`)?.value || '';
+        
+        // Coletar critérios marcados
+        const criteriosChecados = {};
+        item.querySelectorAll('.criterio-checkbox').forEach(cb => {
+            criteriosChecados[cb.dataset.criterioId] = cb.checked;
+        });
 
         if (status) {
             resultados.push({
                 item_id: itemId,
                 status: status,
-                observacao: observacao,
-                qr_code_lido: true
+                observacoes: observacao,
+                qr_code_lido: true,
+                criterios_checados: criteriosChecados
             });
         }
     });
@@ -645,7 +717,7 @@ async function excluirFuncionario(id) {
             
             const result = await response.json();
             if (result.success) {
-                alert('Funcionário excluído com sucess0o!');
+                alert('Funcionário excluído com sucesso!');
                 carregarFuncionarios();
             }
         } catch (error) {
@@ -719,7 +791,6 @@ async function excluirChecklist(id) {
         }
     }
 }
-
 
 // Função para carregar lista de inspeções (admin)
 async function carregarInspecoes() {
@@ -902,8 +973,6 @@ async function visualizarInspecao(inspecaoId) {
                         <p>${inspecao.observacoes_gerais}</p>
                     </div>
                 ` : ''}
-                
-                <!-- <button onclick="imprimirInspecao()" class="btn-imprimir">Imprimir Relatório</button> -->
             `;
             
             document.getElementById('detalhesInspecao').innerHTML = html;
@@ -984,7 +1053,3 @@ window.onclick = function(event) {
         event.target.style.display = 'none';
     }
 };
-
-
-
-

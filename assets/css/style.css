@@ -118,7 +118,7 @@ button:hover {
 .tab {
     padding: 10px 20px;
     cursor: pointer;
-    background-color: #ecf0f1;
+    background-color: #7da6db;
     border: none;
     transition: background-color 0.3s;
 }

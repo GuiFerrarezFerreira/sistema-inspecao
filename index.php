@@ -18,6 +18,39 @@ $usuario_id = $_SESSION['usuario_id'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Checklist de Inspeção</title>
     <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .criterio-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        
+        .criterio-item input[type="text"] {
+            flex: 1;
+        }
+        
+        .criterio-item button {
+            padding: 5px 10px;
+            font-size: 18px;
+            line-height: 1;
+        }
+        
+        .criterios-container {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .checklist-item.status-ok {
+            border-left: 4px solid #2ecc71;
+        }
+        
+        .checklist-item.status-problem {
+            border-left: 4px solid #e74c3c;
+        }
+    </style>
 </head>
 <body>
     <!-- Tela Principal -->
@@ -84,7 +117,7 @@ $usuario_id = $_SESSION['usuario_id'];
                     <div id="relatorioContent"></div>
                 </div>
 
-                <!-- Tab Inspeções - Adicionar após a tab de Checklists -->
+                <!-- Tab Inspeções -->
                 <div id="tab-inspecoes" class="tab-content">
                     <h2>Inspeções Realizadas</h2>
                     
@@ -211,7 +244,10 @@ $usuario_id = $_SESSION['usuario_id'];
                 </div>
                 <div class="form-group">
                     <label>Critérios de Inspeção:</label>
-                    <textarea name="criterios" rows="3" placeholder="Ex: Verificar integridade física, limpeza, funcionamento..."></textarea>
+                    <div id="criteriosContainer" class="criterios-container">
+                        <!-- Critérios serão adicionados dinamicamente aqui -->
+                    </div>
+                    <button type="button" onclick="adicionarCriterio()" class="btn-secondary">+ Adicionar Critério</button>
                 </div>
                 <button type="submit">Cadastrar</button>
             </form>
@@ -258,17 +294,16 @@ $usuario_id = $_SESSION['usuario_id'];
         </div>
     </div>
 
-
-<!-- Modal Visualizar Inspeção -->
-<div id="modalVisualizarInspecao" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeModal('modalVisualizarInspecao')">&times;</span>
-        <h2>Detalhes da Inspeção</h2>
-        <div id="detalhesInspecao">
-            <!-- Conteúdo será carregado dinamicamente -->
+    <!-- Modal Visualizar Inspeção -->
+    <div id="modalVisualizarInspecao" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('modalVisualizarInspecao')">&times;</span>
+            <h2>Detalhes da Inspeção</h2>
+            <div id="detalhesInspecao">
+                <!-- Conteúdo será carregado dinamicamente -->
+            </div>
         </div>
-    </div>
-</div>    
+    </div>    
     <?php endif; ?>
 
     <!-- Modal Realizar Inspeção -->
@@ -289,16 +324,6 @@ $usuario_id = $_SESSION['usuario_id'];
                 <video id="scanner-video"></video>
             </div>
             <button onclick="closeScanner()" class="btn-secondary">Cancelar</button>
-        </div>
-    </div>
-
-    <!-- Modal QR Codes Gerados -->
-    <div id="modalQRCodes" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('modalQRCodes')">&times;</span>
-            <h2>QR Codes Gerados</h2>
-            <div id="qrCodesContent"></div>
-            <button onclick="imprimirQRCodes()" class="print-button">Imprimir Todos</button>
         </div>
     </div>
 

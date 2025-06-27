@@ -63,7 +63,7 @@ function obterItensChecklist($checklist_id) {
     
     // Buscar itens do checklist
     $query = "SELECT ci.id as checklist_item_id, ci.qr_code_data,
-                     i.id as item_id, i.nome, i.descricao, i.criterios_inspecao,
+                     i.id as item_id, i.nome, i.descricao,
                      ir.status, ir.observacoes, ir.data_verificacao, ir.qr_code_lido
               FROM checklist_itens ci
               INNER JOIN itens_inspecao i ON ci.item_id = i.id
@@ -79,12 +79,15 @@ function obterItensChecklist($checklist_id) {
     $itens = array();
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        // Buscar critérios do item
+        $criterios = buscarCriteriosItem($row['item_id'], $inspecao_id);
+        
         $itens[] = array(
             "checklist_item_id" => $row['checklist_item_id'],
             "item_id" => $row['item_id'],
             "nome" => $row['nome'],
             "descricao" => $row['descricao'],
-            "criterios" => $row['criterios_inspecao'],
+            "criterios" => $criterios,
             "qr_code_data" => $row['qr_code_data'],
             "status" => $row['status'],
             "observacoes" => $row['observacoes'],
@@ -97,6 +100,36 @@ function obterItensChecklist($checklist_id) {
         "inspecao_id" => $inspecao_id,
         "itens" => $itens
     ));
+}
+
+function buscarCriteriosItem($item_id, $inspecao_id = null) {
+    global $db;
+    
+    $query = "SELECT c.id, c.descricao, c.ordem,
+                     COALESCE(icr.checado, FALSE) as checado
+              FROM criterios_inspecao c
+              LEFT JOIN inspecao_criterios_resultados icr ON c.id = icr.criterio_id 
+                    AND icr.item_id = :item_id 
+                    AND icr.inspecao_id = :inspecao_id
+              WHERE c.item_id = :item_id AND c.ativo = TRUE
+              ORDER BY c.ordem, c.id";
+    
+    $stmt = $db->prepare($query);
+    $stmt->bindParam(":item_id", $item_id);
+    $stmt->bindParam(":inspecao_id", $inspecao_id);
+    $stmt->execute();
+    
+    $criterios = array();
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $criterios[] = array(
+            "id" => $row['id'],
+            "descricao" => $row['descricao'],
+            "ordem" => $row['ordem'],
+            "checado" => (bool)$row['checado']
+        );
+    }
+    
+    return $criterios;
 }
 
 function iniciarInspecao() {
@@ -218,6 +251,8 @@ function atualizarItemInspecao() {
             throw new Exception("Inspeção não encontrada ou não pertence ao usuário");
         }
         
+        $db->beginTransaction();
+        
         // Verificar se já existe resultado para este item
         $query_exists = "SELECT id FROM inspecao_resultados 
                          WHERE inspecao_id = :inspecao_id AND item_id = :item_id";
@@ -252,12 +287,32 @@ function atualizarItemInspecao() {
         $stmt->bindParam(":qr_code_lido", $qr_code_lido, PDO::PARAM_BOOL);
         
         if ($stmt->execute()) {
+            // Salvar critérios marcados
+            if (isset($data->criterios_checados) && is_array($data->criterios_checados)) {
+                $query_criterio = "INSERT INTO inspecao_criterios_resultados 
+                                   (inspecao_id, item_id, criterio_id, checado) 
+                                   VALUES (:inspecao_id, :item_id, :criterio_id, :checado)
+                                   ON DUPLICATE KEY UPDATE checado = VALUES(checado)";
+                
+                $stmt_criterio = $db->prepare($query_criterio);
+                
+                foreach ($data->criterios_checados as $criterio_id => $checado) {
+                    $stmt_criterio->bindParam(":inspecao_id", $data->inspecao_id);
+                    $stmt_criterio->bindParam(":item_id", $data->item_id);
+                    $stmt_criterio->bindParam(":criterio_id", $criterio_id);
+                    $stmt_criterio->bindValue(":checado", $checado ? 1 : 0, PDO::PARAM_INT);
+                    $stmt_criterio->execute();
+                }
+            }
+            
+            $db->commit();
             enviarResposta(true, "Item atualizado com sucesso");
         } else {
             throw new Exception("Erro ao atualizar item");
         }
         
     } catch (Exception $e) {
+        $db->rollBack();
         http_response_code(400);
         enviarResposta(false, $e->getMessage());
     }
@@ -306,7 +361,8 @@ function finalizarInspecao() {
         $stmt_resultado = $db->prepare($query_resultado);
         
         foreach ($data->resultados as $resultado) {
-            $observacoes = isset($resultado->observacao) ? $resultado->observacao : null;
+            $observacoes = isset($resultado->observacao) ? $resultado->observacao : 
+                          (isset($resultado->observacoes) ? $resultado->observacoes : null);
             $qr_code_lido = isset($resultado->qr_code_lido) ? $resultado->qr_code_lido : true;
             
             $stmt_resultado->bindParam(":inspecao_id", $data->inspecao_id);
@@ -315,6 +371,24 @@ function finalizarInspecao() {
             $stmt_resultado->bindParam(":observacoes", $observacoes);
             $stmt_resultado->bindParam(":qr_code_lido", $qr_code_lido, PDO::PARAM_BOOL);
             $stmt_resultado->execute();
+            
+            // Salvar critérios marcados
+            if (isset($resultado->criterios_checados) && is_array($resultado->criterios_checados)) {
+                $query_criterio = "INSERT INTO inspecao_criterios_resultados 
+                                   (inspecao_id, item_id, criterio_id, checado) 
+                                   VALUES (:inspecao_id, :item_id, :criterio_id, :checado)
+                                   ON DUPLICATE KEY UPDATE checado = VALUES(checado)";
+                
+                $stmt_criterio = $db->prepare($query_criterio);
+                
+                foreach ($resultado->criterios_checados as $criterio_id => $checado) {
+                    $stmt_criterio->bindParam(":inspecao_id", $data->inspecao_id);
+                    $stmt_criterio->bindParam(":item_id", $resultado->item_id);
+                    $stmt_criterio->bindParam(":criterio_id", $criterio_id);
+                    $stmt_criterio->bindValue(":checado", $checado ? 1 : 0, PDO::PARAM_INT);
+                    $stmt_criterio->execute();
+                }
+            }
         }
         
         // Finalizar inspeção
