@@ -326,13 +326,9 @@ function finalizarInspecao() {
     try {
         validarCampoObrigatorio($data->inspecao_id, "inspecao_id");
         
-        if (!isset($data->resultados) || count($data->resultados) == 0) {
-            throw new Exception("Nenhum resultado foi registrado");
-        }
-        
         $db->beginTransaction();
         
-        // Verificar se a inspeção pertence ao usuário
+        // Verificar se a inspeção pertence ao usuário e está em andamento
         $query_check = "SELECT checklist_id FROM inspecoes 
                         WHERE id = :inspecao_id 
                         AND funcionario_id = :funcionario_id 
@@ -347,48 +343,75 @@ function finalizarInspecao() {
             throw new Exception("Inspeção não encontrada ou não pertence ao usuário");
         }
         
-        // Inserir/atualizar resultados
-        $query_resultado = "INSERT INTO inspecao_resultados 
-                           (inspecao_id, item_id, status, observacoes, data_verificacao, qr_code_lido) 
-                           VALUES 
-                           (:inspecao_id, :item_id, :status, :observacoes, NOW(), :qr_code_lido)
-                           ON DUPLICATE KEY UPDATE
-                           status = VALUES(status),
-                           observacoes = VALUES(observacoes),
-                           data_verificacao = NOW(),
-                           qr_code_lido = VALUES(qr_code_lido)";
-        
-        $stmt_resultado = $db->prepare($query_resultado);
-        
-        foreach ($data->resultados as $resultado) {
-            $observacoes = isset($resultado->observacao) ? $resultado->observacao : 
-                          (isset($resultado->observacoes) ? $resultado->observacoes : null);
-            $qr_code_lido = isset($resultado->qr_code_lido) ? $resultado->qr_code_lido : true;
+        // Processar resultados apenas se foram enviados
+        if (isset($data->resultados) && is_array($data->resultados) && count($data->resultados) > 0) {
             
-            $stmt_resultado->bindParam(":inspecao_id", $data->inspecao_id);
-            $stmt_resultado->bindParam(":item_id", $resultado->item_id);
-            $stmt_resultado->bindParam(":status", $resultado->status);
-            $stmt_resultado->bindParam(":observacoes", $observacoes);
-            $stmt_resultado->bindParam(":qr_code_lido", $qr_code_lido, PDO::PARAM_BOOL);
-            $stmt_resultado->execute();
+            // Primeiro, verificar quais itens já foram inspecionados
+            $query_verificar = "SELECT item_id FROM inspecao_resultados 
+                               WHERE inspecao_id = :inspecao_id";
+            $stmt_verificar = $db->prepare($query_verificar);
+            $stmt_verificar->bindParam(":inspecao_id", $data->inspecao_id);
+            $stmt_verificar->execute();
             
-            // Salvar critérios marcados
-            if (isset($resultado->criterios_checados) && is_array($resultado->criterios_checados)) {
-                $query_criterio = "INSERT INTO inspecao_criterios_resultados 
-                                   (inspecao_id, item_id, criterio_id, checado) 
-                                   VALUES (:inspecao_id, :item_id, :criterio_id, :checado)
-                                   ON DUPLICATE KEY UPDATE checado = VALUES(checado)";
+            $itens_ja_inspecionados = array();
+            while ($row = $stmt_verificar->fetch(PDO::FETCH_ASSOC)) {
+                $itens_ja_inspecionados[] = $row['item_id'];
+            }
+            
+            // Processar apenas itens que ainda não foram inspecionados
+            $query_resultado = "INSERT INTO inspecao_resultados 
+                               (inspecao_id, item_id, status, observacoes, data_verificacao, qr_code_lido) 
+                               VALUES 
+                               (:inspecao_id, :item_id, :status, :observacoes, NOW(), :qr_code_lido)";
+            
+            $stmt_resultado = $db->prepare($query_resultado);
+            
+            foreach ($data->resultados as $resultado) {
+                // Pular se o item já foi inspecionado
+                if (in_array($resultado->item_id, $itens_ja_inspecionados)) {
+                    continue;
+                }
                 
-                $stmt_criterio = $db->prepare($query_criterio);
+                $observacoes = isset($resultado->observacao) ? $resultado->observacao : 
+                              (isset($resultado->observacoes) ? $resultado->observacoes : null);
+                $qr_code_lido = isset($resultado->qr_code_lido) ? $resultado->qr_code_lido : true;
                 
-                foreach ($resultado->criterios_checados as $criterio_id => $checado) {
-                    $stmt_criterio->bindParam(":inspecao_id", $data->inspecao_id);
-                    $stmt_criterio->bindParam(":item_id", $resultado->item_id);
-                    $stmt_criterio->bindParam(":criterio_id", $criterio_id);
-                    $stmt_criterio->bindValue(":checado", $checado ? 1 : 0, PDO::PARAM_INT);
-                    $stmt_criterio->execute();
+                $stmt_resultado->bindParam(":inspecao_id", $data->inspecao_id);
+                $stmt_resultado->bindParam(":item_id", $resultado->item_id);
+                $stmt_resultado->bindParam(":status", $resultado->status);
+                $stmt_resultado->bindParam(":observacoes", $observacoes);
+                $stmt_resultado->bindParam(":qr_code_lido", $qr_code_lido, PDO::PARAM_BOOL);
+                $stmt_resultado->execute();
+                
+                // Salvar critérios marcados apenas para itens novos
+                if (isset($resultado->criterios_checados) && is_array($resultado->criterios_checados)) {
+                    $query_criterio = "INSERT INTO inspecao_criterios_resultados 
+                                       (inspecao_id, item_id, criterio_id, checado) 
+                                       VALUES (:inspecao_id, :item_id, :criterio_id, :checado)";
+                    
+                    $stmt_criterio = $db->prepare($query_criterio);
+                    
+                    foreach ($resultado->criterios_checados as $criterio_id => $checado) {
+                        $stmt_criterio->bindParam(":inspecao_id", $data->inspecao_id);
+                        $stmt_criterio->bindParam(":item_id", $resultado->item_id);
+                        $stmt_criterio->bindParam(":criterio_id", $criterio_id);
+                        $stmt_criterio->bindValue(":checado", $checado ? 1 : 0, PDO::PARAM_INT);
+                        $stmt_criterio->execute();
+                    }
                 }
             }
+        }
+        
+        // Verificar se há pelo menos um item inspecionado antes de finalizar
+        $query_count = "SELECT COUNT(*) as total FROM inspecao_resultados 
+                        WHERE inspecao_id = :inspecao_id";
+        $stmt_count = $db->prepare($query_count);
+        $stmt_count->bindParam(":inspecao_id", $data->inspecao_id);
+        $stmt_count->execute();
+        $row_count = $stmt_count->fetch(PDO::FETCH_ASSOC);
+        
+        if ($row_count['total'] == 0) {
+            throw new Exception("Nenhum item foi inspecionado. Por favor, inspecione pelo menos um item antes de finalizar.");
         }
         
         // Finalizar inspeção
