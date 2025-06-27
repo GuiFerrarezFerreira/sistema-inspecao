@@ -33,9 +33,12 @@ switch ($_SERVER['REQUEST_METHOD']) {
 function listarFuncionarios() {
     global $db;
     
-    $query = "SELECT id, nome, email, usuario, tipo, cargo, ativo, criado_em 
-              FROM usuarios WHERE ativo = 1
-              ORDER BY nome";
+    $query = "SELECT u.id, u.nome, u.email, u.usuario, u.tipo, u.cargo, u.ativo, u.criado_em,
+                     e.nome as empresa_nome, e.id as empresa_id
+              FROM usuarios u
+              LEFT JOIN empresas e ON u.empresa_id = e.id
+              WHERE u.ativo = 1
+              ORDER BY u.nome";
     
     $stmt = $db->prepare($query);
     $stmt->execute();
@@ -50,6 +53,8 @@ function listarFuncionarios() {
             "usuario" => $row['usuario'],
             "tipo" => $row['tipo'],
             "cargo" => $row['cargo'],
+            "empresa_id" => $row['empresa_id'],
+            "empresa_nome" => $row['empresa_nome'],
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
         );

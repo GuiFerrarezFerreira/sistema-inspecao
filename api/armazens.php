@@ -33,10 +33,12 @@ switch ($_SERVER['REQUEST_METHOD']) {
 function listarArmazens() {
     global $db;
     
-    $query = "SELECT id, nome, codigo, localizacao, descricao, ativo, criado_em 
-              FROM armazens 
-              WHERE ativo = TRUE 
-              ORDER BY nome";
+    $query = "SELECT a.id, a.nome, a.codigo, a.localizacao, a.descricao, a.ativo, a.criado_em,
+                     e.nome as empresa_nome, e.id as empresa_id
+              FROM armazens a
+              LEFT JOIN empresas e ON a.empresa_id = e.id
+              WHERE a.ativo = TRUE 
+              ORDER BY a.nome";
     
     $stmt = $db->prepare($query);
     $stmt->execute();
@@ -50,6 +52,8 @@ function listarArmazens() {
             "codigo" => $row['codigo'],
             "localizacao" => $row['localizacao'],
             "descricao" => $row['descricao'],
+            "empresa_id" => $row['empresa_id'],
+            "empresa_nome" => $row['empresa_nome'],
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
         );

@@ -69,7 +69,9 @@ $usuario_id = $_SESSION['usuario_id'];
             <!-- Área do Administrador -->
             <div id="adminArea">
                 <div class="tabs">
-                    <button class="tab active" onclick="showTab('funcionarios')">Funcionários</button>
+                    <button class="tab active" onclick="showTab('empresas')">Empresas</button>
+                    <button class="tab" onclick="showTab('unidades')">Unidades</button>
+                    <button class="tab" onclick="showTab('funcionarios')">Funcionários</button>
                     <button class="tab" onclick="showTab('armazens')">Armazéns</button>
                     <button class="tab" onclick="showTab('itens')">Itens</button>
                     <button class="tab" onclick="showTab('checklists')">Checklists</button>
@@ -77,8 +79,22 @@ $usuario_id = $_SESSION['usuario_id'];
                     <button class="tab" onclick="showTab('inspecoes')">Inspeções</button>                    
                 </div>
 
+                <!-- Tab Empresas -->
+                <div id="tab-empresas" class="tab-content active">
+                    <h2>Gerenciar Empresas</h2>
+                    <button onclick="showModal('modalEmpresa')" class="btn-success">+ Nova Empresa</button>
+                    <div id="empresasList" class="grid"></div>
+                </div>
+
+                <!-- Tab Unidades -->
+                <div id="tab-unidades" class="tab-content">
+                    <h2>Gerenciar Unidades</h2>
+                    <button onclick="showModal('modalUnidade')" class="btn-success">+ Nova Unidade</button>
+                    <div id="unidadesList" class="grid"></div>
+                </div>
+
                 <!-- Tab Funcionários -->
-                <div id="tab-funcionarios" class="tab-content active">
+                <div id="tab-funcionarios" class="tab-content">
                     <h2>Gerenciar Funcionários</h2>
                     <button onclick="showModal('modalFuncionario')" class="btn-success">+ Novo Funcionário</button>
                     <div id="funcionariosList" class="grid"></div>
@@ -164,12 +180,123 @@ $usuario_id = $_SESSION['usuario_id'];
 
     <!-- Modais -->
     <?php if ($usuario_tipo === 'admin'): ?>
+    <!-- Modal Empresa -->
+    <div id="modalEmpresa" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('modalEmpresa')">&times;</span>
+            <h2>Cadastrar Empresa</h2>
+            <form id="formEmpresa">
+                <div class="form-group">
+                    <label>Nome da Empresa:</label>
+                    <input type="text" name="nome" required>
+                </div>
+                <div class="form-group">
+                    <label>CNPJ:</label>
+                    <input type="text" name="cnpj" placeholder="00.000.000/0001-00">
+                </div>
+                <div class="form-group">
+                    <label>Telefone:</label>
+                    <input type="text" name="telefone" placeholder="(11) 1234-5678">
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" name="email">
+                </div>
+                <button type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Unidade -->
+    <div id="modalUnidade" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('modalUnidade')">&times;</span>
+            <h2>Cadastrar Unidade</h2>
+            <form id="formUnidade">
+                <div class="form-group">
+                    <label>Empresa:</label>
+                    <select name="empresa_id" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Nome da Unidade:</label>
+                    <input type="text" name="nome" required>
+                </div>
+                <div class="form-group">
+                    <label>Endereço:</label>
+                    <input type="text" name="endereco">
+                </div>
+                <div class="form-group">
+                    <label>Cidade:</label>
+                    <input type="text" name="cidade" required>
+                </div>
+                <div class="form-group">
+                    <label>Estado (UF):</label>
+                    <select name="estado" required>
+                        <option value="">Selecione...</option>
+                        <option value="AC">AC</option>
+                        <option value="AL">AL</option>
+                        <option value="AP">AP</option>
+                        <option value="AM">AM</option>
+                        <option value="BA">BA</option>
+                        <option value="CE">CE</option>
+                        <option value="DF">DF</option>
+                        <option value="ES">ES</option>
+                        <option value="GO">GO</option>
+                        <option value="MA">MA</option>
+                        <option value="MT">MT</option>
+                        <option value="MS">MS</option>
+                        <option value="MG">MG</option>
+                        <option value="PA">PA</option>
+                        <option value="PB">PB</option>
+                        <option value="PR">PR</option>
+                        <option value="PE">PE</option>
+                        <option value="PI">PI</option>
+                        <option value="RJ">RJ</option>
+                        <option value="RN">RN</option>
+                        <option value="RS">RS</option>
+                        <option value="RO">RO</option>
+                        <option value="RR">RR</option>
+                        <option value="SC">SC</option>
+                        <option value="SP">SP</option>
+                        <option value="SE">SE</option>
+                        <option value="TO">TO</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>CEP:</label>
+                    <input type="text" name="cep" placeholder="00000-000">
+                </div>
+                <div class="form-group">
+                    <label>Telefone:</label>
+                    <input type="text" name="telefone" placeholder="(11) 1234-5678">
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" name="email">
+                </div>
+                <div class="form-group">
+                    <label>Responsável:</label>
+                    <input type="text" name="responsavel">
+                </div>
+                <button type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal Funcionário -->
     <div id="modalFuncionario" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('modalFuncionario')">&times;</span>
             <h2>Cadastrar Funcionário</h2>
             <form id="formFuncionario">
+                <div class="form-group">
+                    <label>Empresa:</label>
+                    <select name="empresa_id" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Nome:</label>
                     <input type="text" name="nome" required>
@@ -201,6 +328,12 @@ $usuario_id = $_SESSION['usuario_id'];
             <span class="close" onclick="closeModal('modalArmazem')">&times;</span>
             <h2>Cadastrar Armazém</h2>
             <form id="formArmazem">
+                <div class="form-group">
+                    <label>Empresa:</label>
+                    <select name="empresa_id" required>
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Nome:</label>
                     <input type="text" name="nome" required>

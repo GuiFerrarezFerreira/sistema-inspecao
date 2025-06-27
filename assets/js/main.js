@@ -61,7 +61,63 @@ function removerCriterio(button) {
     }
 }
 
-// Funções de formulários
+// Funções de formulários - EMPRESAS
+document.getElementById('formEmpresa')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+
+    try {
+        const response = await fetch('api/empresas.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Empresa cadastrada com sucesso!');
+            closeModal('modalEmpresa');
+            carregarEmpresas();
+            e.target.reset();
+        } else {
+            alert(result.message || 'Erro ao cadastrar empresa');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao cadastrar empresa');
+    }
+});
+
+// Funções de formulários - UNIDADES
+document.getElementById('formUnidade')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+
+    try {
+        const response = await fetch('api/unidades.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Unidade cadastrada com sucesso!');
+            closeModal('modalUnidade');
+            carregarUnidades();
+            e.target.reset();
+        } else {
+            alert(result.message || 'Erro ao cadastrar unidade');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao cadastrar unidade');
+    }
+});
+
+// Funções de formulários - FUNCIONÁRIOS
 document.getElementById('formFuncionario')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -89,6 +145,7 @@ document.getElementById('formFuncionario')?.addEventListener('submit', async (e)
     }
 });
 
+// Funções de formulários - ARMAZÉNS
 document.getElementById('formArmazem')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -116,6 +173,7 @@ document.getElementById('formArmazem')?.addEventListener('submit', async (e) => 
     }
 });
 
+// Funções de formulários - ITENS
 document.getElementById('formItem')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -152,6 +210,7 @@ document.getElementById('formItem')?.addEventListener('submit', async (e) => {
     }
 });
 
+// Funções de formulários - CHECKLISTS
 document.getElementById('formChecklist')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -191,8 +250,10 @@ document.getElementById('formChecklist')?.addEventListener('submit', async (e) =
     }
 });
 
-// Atualizar a função carregarDados para incluir inspeções
+// Função principal de carregamento de dados
 function carregarDados() {
+    carregarEmpresas();
+    carregarUnidades();
     carregarFuncionarios();
     carregarArmazens();
     carregarItens();
@@ -200,6 +261,75 @@ function carregarDados() {
     carregarInspecoes();
 }
 
+// Função para carregar EMPRESAS
+async function carregarEmpresas() {
+    try {
+        const response = await fetch('api/empresas.php');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const html = result.data.map(e => `
+                <div class="card">
+                    <h3>${e.nome}</h3>
+                    ${e.cnpj ? `<p>CNPJ: ${e.cnpj}</p>` : ''}
+                    ${e.telefone ? `<p>Telefone: ${e.telefone}</p>` : ''}
+                    ${e.email ? `<p>Email: ${e.email}</p>` : ''}
+                    <p>Unidades: ${e.total_unidades}</p>
+                    <p>Funcionários: ${e.total_funcionarios}</p>
+                    <p>Armazéns: ${e.total_armazens}</p>
+                    <div class="actions">
+                        <button onclick="editarEmpresa(${e.id})">Editar</button>
+                        <button onclick="excluirEmpresa(${e.id})" class="btn-danger">Excluir</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('empresasList').innerHTML = html;
+
+            // Atualizar todos os selects de empresa
+            const selectsEmpresa = document.querySelectorAll('select[name="empresa_id"]');
+            selectsEmpresa.forEach(select => {
+                select.innerHTML = '<option value="">Selecione...</option>' +
+                    result.data.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar empresas:', error);
+    }
+}
+
+// Função para carregar UNIDADES
+async function carregarUnidades() {
+    try {
+        const response = await fetch('api/unidades.php');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const html = result.data.map(u => `
+                <div class="card">
+                    <h3>${u.nome}</h3>
+                    <p>Empresa: ${u.empresa_nome}</p>
+                    ${u.endereco ? `<p>Endereço: ${u.endereco}</p>` : ''}
+                    <p>Cidade/UF: ${u.cidade}/${u.estado}</p>
+                    ${u.cep ? `<p>CEP: ${u.cep}</p>` : ''}
+                    ${u.telefone ? `<p>Telefone: ${u.telefone}</p>` : ''}
+                    ${u.email ? `<p>Email: ${u.email}</p>` : ''}
+                    ${u.responsavel ? `<p>Responsável: ${u.responsavel}</p>` : ''}
+                    <div class="actions">
+                        <button onclick="editarUnidade(${u.id})">Editar</button>
+                        <button onclick="excluirUnidade(${u.id})" class="btn-danger">Excluir</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('unidadesList').innerHTML = html;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar unidades:', error);
+    }
+}
+
+// Função para carregar FUNCIONÁRIOS
 async function carregarFuncionarios() {
     try {
         const response = await fetch('api/funcionarios.php');
@@ -209,6 +339,7 @@ async function carregarFuncionarios() {
             const html = result.data.map(f => `
                 <div class="card">
                     <h3>${f.nome}</h3>
+                    <p>Empresa: ${f.empresa_nome || 'Não definida'}</p>
                     <p>Cargo: ${f.cargo}</p>
                     <p>Email: ${f.email}</p>
                     <p>Usuário: ${f.usuario}</p>
@@ -227,6 +358,7 @@ async function carregarFuncionarios() {
     }
 }
 
+// Função para carregar ARMAZÉNS
 async function carregarArmazens() {
     try {
         const response = await fetch('api/armazens.php');
@@ -236,6 +368,7 @@ async function carregarArmazens() {
             const html = result.data.map(a => `
                 <div class="card">
                     <h3>${a.nome}</h3>
+                    <p>Empresa: ${a.empresa_nome || 'Não definida'}</p>
                     <p>Código: ${a.codigo}</p>
                     <p>Localização: ${a.localizacao}</p>
                     ${a.descricao ? `<p>Descrição: ${a.descricao}</p>` : ''}
@@ -248,7 +381,7 @@ async function carregarArmazens() {
 
             document.getElementById('armazensList').innerHTML = html;
 
-            // Atualizar selects
+            // Atualizar selects de armazém
             const selectArmazem = document.querySelector('select[name="armazem_id"]');
             if (selectArmazem) {
                 selectArmazem.innerHTML = '<option value="">Selecione...</option>' +
@@ -266,6 +399,7 @@ async function carregarArmazens() {
     }
 }
 
+// Função para carregar ITENS
 async function carregarItens() {
     try {
         const response = await fetch('api/itens.php');
@@ -297,6 +431,7 @@ async function carregarItens() {
     }
 }
 
+// Função para carregar CHECKLISTS
 async function carregarChecklists() {
     try {
         const response = await fetch('api/checklists.php');
@@ -337,6 +472,7 @@ async function carregarChecklists() {
     }
 }
 
+// Função para carregar itens de um armazém específico
 async function carregarItensArmazem(armazemId) {
     if (!armazemId) {
         document.getElementById('itensCheckboxes').innerHTML = '';
@@ -361,6 +497,7 @@ async function carregarItensArmazem(armazemId) {
     }
 }
 
+// Função para carregar checklists do funcionário
 async function carregarMeusChecklists() {
     try {
         const response = await fetch('api/checklists.php?funcionario=1');
@@ -577,12 +714,6 @@ async function marcarStatus(itemId, status) {
     item.classList.remove('status-ok', 'status-problem');
     item.classList.add(`status-${status}`);
     
-    /* if (status === 'problema') {
-        document.getElementById(`observacao-${itemId}`).style.display = 'block';
-    } else {
-        document.getElementById(`observacao-${itemId}`).style.display = 'none';
-    } */
-    
     // Coletar critérios marcados
     const criteriosChecados = {};
     document.querySelectorAll(`#item-${itemId} .criterio-checkbox`).forEach(cb => {
@@ -613,22 +744,12 @@ async function marcarStatus(itemId, status) {
 async function finalizarInspecao(inspecaoId) {
     const itens = document.querySelectorAll('.checklist-item');
     const resultados = [];
-    let temProblema = false;
-    let problemaSemObservacao = false;
 
     itens.forEach(item => {
         const itemId = item.id.split('-')[1];
-        const status = item.classList.contains('status-problem') ? 'problema' : 
-        item.classList.contains('status-ok') ? 'ok' : null;
+        const status = item.classList.contains('status-ok') ? 'ok' : 
+                     item.classList.contains('status-problem') ? 'problema' : null;
         const observacao = document.querySelector(`#observacao-${itemId} textarea`)?.value || '';
-        
-        // Verificar se há problema sem observação
-        if (status === 'problema') {
-            temProblema = true;
-            if (!observacao.trim()) {
-                problemaSemObservacao = true;
-            }
-        }
         
         // Coletar critérios marcados
         const criteriosChecados = {};
@@ -647,23 +768,9 @@ async function finalizarInspecao(inspecaoId) {
         }
     });
 
-    /* if (resultados.length === 0) {
+    if (resultados.length === 0) {
         alert('Por favor, inspecione pelo menos um item!');
         return;
-    } */
-
-    // Verificar se há problemas sem observação
-    if (problemaSemObservacao) {
-        alert('Por favor, descreva todos os problemas encontrados nas observações!');
-        return;
-    }
-
-    // Confirmar finalização se houver problemas
-    if (temProblema) {
-        const confirmar = confirm('Foram encontrados problemas na inspeção. Deseja realmente finalizar?');
-        if (!confirmar) {
-            return;
-        }
     }
 
     try {
@@ -687,132 +794,6 @@ async function finalizarInspecao(inspecaoId) {
     } catch (error) {
         console.error('Erro:', error);
         alert('Erro ao finalizar inspeção');
-    }
-}
-
-// Funções de relatório
-async function gerarRelatorio() {
-    const dataInicio = document.getElementById('dataInicio').value;
-    const dataFim = document.getElementById('dataFim').value;
-
-    if (!dataInicio || !dataFim) {
-        alert('Por favor, selecione o período!');
-        return;
-    }
-
-    try {
-        const response = await fetch(`api/relatorios.php?tipo=geral&data_inicio=${dataInicio}&data_fim=${dataFim}`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            const data = result.data;
-            const stats = data.estatisticas;
-            
-            const html = `
-                <div class="alert alert-success">
-                    <h3>Resumo do Período</h3>
-                    <p>Total de Inspeções: ${stats.total_inspecoes}</p>
-                    <p>Inspeções Concluídas: ${stats.inspecoes_concluidas}</p>
-                    <p>Inspeções em Andamento: ${stats.inspecoes_andamento}</p>
-                    <p>Itens Verificados: ${stats.total_itens_verificados}</p>
-                    <p>Itens OK: ${stats.itens_ok}</p>
-                    <p>Itens com Problema: ${stats.itens_problema}</p>
-                    <p>Taxa de Conformidade: ${stats.taxa_conformidade}%</p>
-                </div>
-            `;
-
-            document.getElementById('relatorioContent').innerHTML = html;
-        }
-    } catch (error) {
-        console.error('Erro ao gerar relatório:', error);
-        alert('Erro ao gerar relatório');
-    }
-}
-
-// Funções auxiliares de CRUD
-async function excluirFuncionario(id) {
-    if (confirm('Deseja realmente excluir este funcionário?')) {
-        try {
-            const response = await fetch('api/funcionarios.php', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: id })
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-                alert('Funcionário excluído com sucesso!');
-                carregarFuncionarios();
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-        }
-    }
-}
-
-async function excluirArmazem(id) {
-    if (confirm('Deseja realmente excluir este armazém?')) {
-        try {
-            const response = await fetch('api/armazens.php', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: id })
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-                alert('Armazém excluído com sucesso!');
-                carregarArmazens();
-            } else {
-                alert(result.message || 'Erro ao excluir armazém');
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-        }
-    }
-}
-
-async function excluirItem(id) {
-    if (confirm('Deseja realmente excluir este item?')) {
-        try {
-            const response = await fetch('api/itens.php', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: id })
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-                alert('Item excluído com sucesso!');
-                carregarItens();
-            } else {
-                alert(result.message || 'Erro ao excluir item');
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-        }
-    }
-}
-
-async function excluirChecklist(id) {
-    if (confirm('Deseja realmente excluir este checklist?')) {
-        try {
-            const response = await fetch('api/checklists.php', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: id })
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-                alert('Checklist excluído com sucesso!');
-                carregarChecklists();
-            } else {
-                alert(result.message || 'Erro ao excluir checklist');
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-        }
     }
 }
 
@@ -1008,6 +989,201 @@ async function visualizarInspecao(inspecaoId) {
     }
 }
 
+// Funções de relatório
+async function gerarRelatorio() {
+    const dataInicio = document.getElementById('dataInicio').value;
+    const dataFim = document.getElementById('dataFim').value;
+
+    if (!dataInicio || !dataFim) {
+        alert('Por favor, selecione o período!');
+        return;
+    }
+
+    try {
+        const response = await fetch(`api/relatorios.php?tipo=geral&data_inicio=${dataInicio}&data_fim=${dataFim}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const data = result.data;
+            const stats = data.estatisticas;
+            
+            const html = `
+                <div class="alert alert-success">
+                    <h3>Resumo do Período</h3>
+                    <p>Total de Inspeções: ${stats.total_inspecoes}</p>
+                    <p>Inspeções Concluídas: ${stats.inspecoes_concluidas}</p>
+                    <p>Inspeções em Andamento: ${stats.inspecoes_andamento}</p>
+                    <p>Itens Verificados: ${stats.total_itens_verificados}</p>
+                    <p>Itens OK: ${stats.itens_ok}</p>
+                    <p>Itens com Problema: ${stats.itens_problema}</p>
+                    <p>Taxa de Conformidade: ${stats.taxa_conformidade}%</p>
+                </div>
+            `;
+
+            document.getElementById('relatorioContent').innerHTML = html;
+        }
+    } catch (error) {
+        console.error('Erro ao gerar relatório:', error);
+        alert('Erro ao gerar relatório');
+    }
+}
+
+// Funções auxiliares de CRUD
+async function excluirEmpresa(id) {
+    if (confirm('Deseja realmente excluir esta empresa?')) {
+        try {
+            const response = await fetch('api/empresas.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Empresa excluída com sucesso!');
+                carregarEmpresas();
+            } else {
+                alert(result.message || 'Erro ao excluir empresa');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+async function excluirUnidade(id) {
+    if (confirm('Deseja realmente excluir esta unidade?')) {
+        try {
+            const response = await fetch('api/unidades.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Unidade excluída com sucesso!');
+                carregarUnidades();
+            } else {
+                alert(result.message || 'Erro ao excluir unidade');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+async function excluirFuncionario(id) {
+    if (confirm('Deseja realmente excluir este funcionário?')) {
+        try {
+            const response = await fetch('api/funcionarios.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Funcionário excluído com sucesso!');
+                carregarFuncionarios();
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+async function excluirArmazem(id) {
+    if (confirm('Deseja realmente excluir este armazém?')) {
+        try {
+            const response = await fetch('api/armazens.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Armazém excluído com sucesso!');
+                carregarArmazens();
+            } else {
+                alert(result.message || 'Erro ao excluir armazém');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+async function excluirItem(id) {
+    if (confirm('Deseja realmente excluir este item?')) {
+        try {
+            const response = await fetch('api/itens.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Item excluído com sucesso!');
+                carregarItens();
+            } else {
+                alert(result.message || 'Erro ao excluir item');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+async function excluirChecklist(id) {
+    if (confirm('Deseja realmente excluir este checklist?')) {
+        try {
+            const response = await fetch('api/checklists.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Checklist excluído com sucesso!');
+                carregarChecklists();
+            } else {
+                alert(result.message || 'Erro ao excluir checklist');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+// Funções de edição (placeholder)
+function editarEmpresa(id) {
+    alert('Função de edição será implementada');
+}
+
+function editarUnidade(id) {
+    alert('Função de edição será implementada');
+}
+
+function editarFuncionario(id) {
+    alert('Função de edição será implementada');
+}
+
+function editarArmazem(id) {
+    alert('Função de edição será implementada');
+}
+
+function editarItem(id) {
+    alert('Função de edição será implementada');
+}
+
+function editarChecklist(id) {
+    alert('Função de edição será implementada');
+}
+
 // Função auxiliar para formatar data e hora
 function formatarDataHora(dataHora) {
     if (!dataHora) return '-';
@@ -1052,23 +1228,6 @@ function atualizarFiltrosInspecao(inspecoes) {
             selectArmazem.appendChild(option);
         });
     }
-}
-
-// Funções de edição (a serem implementadas)
-function editarFuncionario(id) {
-    alert('Função de edição será implementada');
-}
-
-function editarArmazem(id) {
-    alert('Função de edição será implementada');
-}
-
-function editarItem(id) {
-    alert('Função de edição será implementada');
-}
-
-function editarChecklist(id) {
-    alert('Função de edição será implementada');
 }
 
 // Fechar modais ao clicar fora
