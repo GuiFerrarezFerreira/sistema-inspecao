@@ -456,7 +456,8 @@ function listarInspecoes() {
                      a.nome as armazem_nome,
                      u.nome as funcionario_nome,
                      COUNT(DISTINCT ir.id) as total_itens_verificados,
-                     COUNT(DISTINCT CASE WHEN ir.status = 'problema' THEN ir.id END) as total_problemas
+                     COUNT(DISTINCT CASE WHEN ir.status = 'problema' THEN ir.id END) as total_problemas,
+                     COUNT(DISTINCT CASE WHEN ir.tem_avaria = TRUE THEN ir.id END) as total_avarias
               FROM inspecoes i
               INNER JOIN checklists c ON i.checklist_id = c.id
               INNER JOIN armazens a ON c.armazem_id = a.id
@@ -490,8 +491,9 @@ function listarInspecoes() {
             "data_inicio" => $row['data_inicio'],
             "data_fim" => $row['data_fim'],
             "status" => $row['status'],
-            "total_itens_verificados" => $row['total_itens_verificados'],
-            "total_problemas" => $row['total_problemas'],
+            "total_itens_verificados" => intval($row['total_itens_verificados']),
+            "total_problemas" => intval($row['total_problemas']),
+            "total_avarias" => intval($row['total_avarias']),
             "observacoes_gerais" => $row['observacoes_gerais']
         );
     }

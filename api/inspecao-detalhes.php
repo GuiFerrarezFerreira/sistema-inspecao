@@ -91,7 +91,7 @@ try {
                     $fotos[] = array(
                         "id" => $foto['id'],
                         "nome_arquivo" => $foto['nome_arquivo'],
-                        "url" => "/uploads/avarias/" . $foto['nome_arquivo']
+                        "url" => "/sistema-inspecao/uploads/avarias/" . $foto['nome_arquivo']
                     );
                 }
                 

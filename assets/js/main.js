@@ -879,6 +879,7 @@ async function carregarInspecoes() {
                             <div style="margin: 10px 0;">
                                 <p><strong>Itens Verificados:</strong> ${i.total_itens_verificados}</p>
                                 <p><strong>Problemas Encontrados:</strong> ${i.total_problemas}</p>
+                                ${i.total_avarias > 0 ? `<p style="color: #f39c12;"><strong>⚠️ Avarias Registradas:</strong> ${i.total_avarias}</p>` : ''}
                                 <p><strong>Taxa de Conformidade:</strong> ${conformidade}%</p>
                             </div>
                         ` : ''}
@@ -980,9 +981,9 @@ async function visualizarInspecao(inspecaoId) {
                 <div class="itens-inspecionados">
                     <h4>Itens Inspecionados</h4>
                     ${itens.map(item => `
-                        <div class="item-resultado ${item.status}">
-                            <div class="item-info">
-                                <h4>${item.item_nome}</h4>
+                        <div class="item-resultado ${item.status} ${item.tem_avaria ? 'tem-avaria' : ''}">
+                            <div class="item-info" style="flex: 1;">
+                                <h4>${item.item_nome} ${item.tem_avaria ? '<span class="avaria-indicator">⚠️ Avaria</span>' : ''}</h4>
                                 ${item.item_descricao ? `<p>${item.item_descricao}</p>` : ''}
                                 ${item.criterios_inspecao ? `<p><strong>Critérios:</strong> ${item.criterios_inspecao}</p>` : ''}
                                 <p class="qr-indicator">
@@ -994,18 +995,25 @@ async function visualizarInspecao(inspecaoId) {
                                     </div>
                                 ` : ''}
                                 ${item.tem_avaria && item.avaria ? `
-                                    <div class="avaria-info" style="margin-top: 10px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
-                                        <h5 style="margin: 0 0 5px 0; color: #856404;">🔧 Avaria Registrada</h5>
-                                        ${item.avaria.observacoes ? `<p style="margin: 5px 0;"><strong>Descrição:</strong> ${item.avaria.observacoes}</p>` : ''}
+                                    <div class="avaria-info" style="margin-top: 10px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+                                        <h5 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">🔧 Detalhes da Avaria</h5>
+                                        ${item.avaria.observacoes ? `
+                                            <div style="margin: 10px 0;">
+                                                <strong>Descrição da avaria:</strong>
+                                                <p style="margin: 5px 0; color: #856404;">${item.avaria.observacoes}</p>
+                                            </div>
+                                        ` : ''}
                                         ${item.avaria.fotos && item.avaria.fotos.length > 0 ? `
-                                            <div style="margin-top: 10px;">
-                                                <strong>Fotos (${item.avaria.fotos.length}):</strong>
-                                                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
-                                                    ${item.avaria.fotos.map(foto => `
-                                                        <img src="${foto.url}" 
-                                                             style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid #ffeaa7;" 
-                                                             onclick="window.open('${foto.url}', '_blank')"
-                                                             title="Clique para ampliar">
+                                            <div style="margin-top: 15px;">
+                                                <strong>Fotos da avaria (${item.avaria.fotos.length}):</strong>
+                                                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                                                    ${item.avaria.fotos.map((foto, index) => `
+                                                        <div style="position: relative;">
+                                                            <img src="${foto.url}" 
+                                                                 style="width: 120px; height: 120px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid #ffeaa7; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" 
+                                                                 onclick="abrirModalFoto('${foto.url}', '${item.item_nome} - Foto ${index + 1}')"
+                                                                 title="Clique para ampliar">
+                                                        </div>
                                                     `).join('')}
                                                 </div>
                                             </div>
@@ -1013,7 +1021,7 @@ async function visualizarInspecao(inspecaoId) {
                                     </div>
                                 ` : ''}
                             </div>
-                            <div class="item-status">
+                            <div class="item-status" style="min-width: 100px; text-align: center;">
                                 <span class="status-badge ${item.status}">
                                     ${item.status === 'ok' ? '✓ OK' : '✗ Problema'}
                                 </span>
@@ -1028,6 +1036,10 @@ async function visualizarInspecao(inspecaoId) {
                         <p>${inspecao.observacoes_gerais}</p>
                     </div>
                 ` : ''}
+                
+                <button onclick="imprimirInspecao()" class="btn-imprimir" style="margin-top: 20px;">
+                    🖨️ Imprimir Relatório
+                </button>
             `;
             
             document.getElementById('detalhesInspecao').innerHTML = html;
@@ -1037,6 +1049,32 @@ async function visualizarInspecao(inspecaoId) {
         console.error('Erro ao carregar detalhes da inspeção:', error);
         alert('Erro ao carregar detalhes da inspeção');
     }
+}
+
+// Função para abrir modal de foto ampliada
+function abrirModalFoto(url, titulo) {
+    // Criar modal se não existir
+    let modalFoto = document.getElementById('modalFotoAmpliada');
+    
+    if (!modalFoto) {
+        modalFoto = document.createElement('div');
+        modalFoto.id = 'modalFotoAmpliada';
+        modalFoto.className = 'modal';
+        modalFoto.innerHTML = `
+            <div class="modal-content" style="max-width: 90%; max-height: 90vh; padding: 0; overflow: hidden;">
+                <span class="close" onclick="document.getElementById('modalFotoAmpliada').style.display='none'">&times;</span>
+                <h3 id="tituloFoto" style="padding: 20px; margin: 0; background: #f8f9fa; border-bottom: 1px solid #dee2e6;"></h3>
+                <div style="padding: 20px; display: flex; justify-content: center; align-items: center; background: #000;">
+                    <img id="fotoAmpliada" style="max-width: 100%; max-height: 70vh; object-fit: contain;">
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalFoto);
+    }
+    
+    document.getElementById('tituloFoto').textContent = titulo || 'Foto da Avaria';
+    document.getElementById('fotoAmpliada').src = url;
+    modalFoto.style.display = 'block';
 }
 
 // Funções de relatório
