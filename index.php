@@ -293,8 +293,14 @@ $usuario_id = $_SESSION['usuario_id'];
             <form id="formFuncionario">
                 <div class="form-group">
                     <label>Empresa:</label>
-                    <select name="empresa_id" required>
+                    <select id="funcionario_empresa_id" onchange="carregarUnidadesPorEmpresa('funcionario')" required>
                         <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Unidade:</label>
+                    <select name="unidade_id" id="funcionario_unidade_id" required disabled>
+                        <option value="">Selecione primeiro a empresa...</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -330,8 +336,14 @@ $usuario_id = $_SESSION['usuario_id'];
             <form id="formArmazem">
                 <div class="form-group">
                     <label>Empresa:</label>
-                    <select name="empresa_id" required>
+                    <select id="armazem_empresa_id" onchange="carregarUnidadesPorEmpresa('armazem')" required>
                         <option value="">Selecione...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Unidade:</label>
+                    <select name="unidade_id" id="armazem_unidade_id" required disabled>
+                        <option value="">Selecione primeiro a empresa...</option>
                     </select>
                 </div>
                 <div class="form-group">

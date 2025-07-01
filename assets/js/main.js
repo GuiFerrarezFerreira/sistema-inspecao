@@ -261,6 +261,32 @@ function carregarDados() {
     carregarInspecoes();
 }
 
+// NOVA FUNÇÃO PARA CARREGAR UNIDADES POR EMPRESA
+async function carregarUnidadesPorEmpresa(contexto) {
+    const empresaId = document.getElementById(`${contexto}_empresa_id`).value;
+    const selectUnidade = document.getElementById(`${contexto}_unidade_id`);
+    
+    if (!empresaId) {
+        selectUnidade.innerHTML = '<option value="">Selecione primeiro a empresa...</option>';
+        selectUnidade.disabled = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`api/unidades.php?empresa_id=${empresaId}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            selectUnidade.innerHTML = '<option value="">Selecione...</option>' +
+                result.data.map(u => `<option value="${u.id}">${u.nome} - ${u.cidade}/${u.estado}</option>`).join('');
+            selectUnidade.disabled = false;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar unidades:', error);
+        selectUnidade.innerHTML = '<option value="">Erro ao carregar unidades</option>';
+    }
+}
+
 // Função para carregar EMPRESAS
 async function carregarEmpresas() {
     try {
@@ -292,6 +318,20 @@ async function carregarEmpresas() {
                 select.innerHTML = '<option value="">Selecione...</option>' +
                     result.data.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
             });
+            
+            // Atualizar select específico para funcionários
+            const selectFuncionarioEmpresa = document.getElementById('funcionario_empresa_id');
+            if (selectFuncionarioEmpresa) {
+                selectFuncionarioEmpresa.innerHTML = '<option value="">Selecione...</option>' +
+                    result.data.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+            }
+            
+            // Atualizar select específico para armazéns
+            const selectArmazemEmpresa = document.getElementById('armazem_empresa_id');
+            if (selectArmazemEmpresa) {
+                selectArmazemEmpresa.innerHTML = '<option value="">Selecione...</option>' +
+                    result.data.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+            }
         }
     } catch (error) {
         console.error('Erro ao carregar empresas:', error);
@@ -339,11 +379,12 @@ async function carregarFuncionarios() {
             const html = result.data.map(f => `
                 <div class="card">
                     <h3>${f.nome}</h3>
-                    <p>Empresa: ${f.empresa_nome || 'Não definida'}</p>
-                    <p>Cargo: ${f.cargo}</p>
-                    <p>Email: ${f.email}</p>
-                    <p>Usuário: ${f.usuario}</p>
-                    <p>Status: ${f.ativo ? 'Ativo' : 'Inativo'}</p>
+                    <p><strong>Empresa:</strong> ${f.empresa_nome || 'Não definida'}</p>
+                    <p><strong>Unidade:</strong> ${f.unidade_nome || 'Não definida'} ${f.unidade_localizacao ? `(${f.unidade_localizacao})` : ''}</p>
+                    <p><strong>Cargo:</strong> ${f.cargo}</p>
+                    <p><strong>Email:</strong> ${f.email}</p>
+                    <p><strong>Usuário:</strong> ${f.usuario}</p>
+                    <p><strong>Status:</strong> ${f.ativo ? 'Ativo' : 'Inativo'}</p>
                     <div class="actions">
                         <button onclick="editarFuncionario(${f.id})">Editar</button>
                         <button onclick="excluirFuncionario(${f.id})" class="btn-danger">Excluir</button>
@@ -368,10 +409,11 @@ async function carregarArmazens() {
             const html = result.data.map(a => `
                 <div class="card">
                     <h3>${a.nome}</h3>
-                    <p>Empresa: ${a.empresa_nome || 'Não definida'}</p>
-                    <p>Código: ${a.codigo}</p>
-                    <p>Localização: ${a.localizacao}</p>
-                    ${a.descricao ? `<p>Descrição: ${a.descricao}</p>` : ''}
+                    <p><strong>Empresa:</strong> ${a.empresa_nome || 'Não definida'}</p>
+                    <p><strong>Unidade:</strong> ${a.unidade_nome || 'Não definida'} ${a.unidade_localizacao ? `(${a.unidade_localizacao})` : ''}</p>
+                    <p><strong>Código:</strong> ${a.codigo}</p>
+                    <p><strong>Localização:</strong> ${a.localizacao}</p>
+                    ${a.descricao ? `<p><strong>Descrição:</strong> ${a.descricao}</p>` : ''}
                     <div class="actions">
                         <button onclick="editarArmazem(${a.id})">Editar</button>
                         <button onclick="excluirArmazem(${a.id})" class="btn-danger">Excluir</button>

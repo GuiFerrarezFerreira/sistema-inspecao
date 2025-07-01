@@ -34,11 +34,14 @@ function listarFuncionarios() {
     global $db;
     
     $query = "SELECT u.id, u.nome, u.email, u.usuario, u.tipo, u.cargo, u.ativo, u.criado_em,
-                     e.nome as empresa_nome, e.id as empresa_id
+                     e.nome as empresa_nome, e.id as empresa_id,
+                     un.nome as unidade_nome, un.id as unidade_id,
+                     CONCAT(un.cidade, '/', un.estado) as unidade_localizacao
               FROM usuarios u
-              LEFT JOIN empresas e ON u.empresa_id = e.id
+              LEFT JOIN unidades un ON u.unidade_id = un.id
+              LEFT JOIN empresas e ON un.empresa_id = e.id
               WHERE u.ativo = 1
-              ORDER BY u.nome";
+              ORDER BY e.nome, un.nome, u.nome";
     
     $stmt = $db->prepare($query);
     $stmt->execute();
@@ -55,6 +58,9 @@ function listarFuncionarios() {
             "cargo" => $row['cargo'],
             "empresa_id" => $row['empresa_id'],
             "empresa_nome" => $row['empresa_nome'],
+            "unidade_id" => $row['unidade_id'],
+            "unidade_nome" => $row['unidade_nome'],
+            "unidade_localizacao" => $row['unidade_localizacao'],
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
         );
@@ -74,10 +80,26 @@ function criarFuncionario() {
         validarCampoObrigatorio($data->usuario, "usuário");
         validarCampoObrigatorio($data->senha, "senha");
         validarCampoObrigatorio($data->cargo, "cargo");
+        validarCampoObrigatorio($data->unidade_id, "unidade");
         
         if (!validarEmail($data->email)) {
             throw new Exception("Email inválido");
         }
+        
+        // Verificar se unidade existe
+        $query_unidade = "SELECT un.id, un.empresa_id 
+                          FROM unidades un 
+                          WHERE un.id = :unidade_id AND un.ativo = TRUE";
+        $stmt_unidade = $db->prepare($query_unidade);
+        $stmt_unidade->bindParam(":unidade_id", $data->unidade_id);
+        $stmt_unidade->execute();
+        
+        if ($stmt_unidade->rowCount() == 0) {
+            throw new Exception("Unidade não encontrada");
+        }
+        
+        $unidade_info = $stmt_unidade->fetch(PDO::FETCH_ASSOC);
+        $empresa_id = $unidade_info['empresa_id'];
         
         // Verificar se usuário já existe
         $query_check = "SELECT id FROM usuarios WHERE usuario = :usuario OR email = :email";
@@ -91,8 +113,8 @@ function criarFuncionario() {
         }
         
         // Criar funcionário
-        $query = "INSERT INTO usuarios (nome, email, usuario, senha, tipo, cargo) 
-                  VALUES (:nome, :email, :usuario, :senha, 'funcionario', :cargo)";
+        $query = "INSERT INTO usuarios (nome, email, usuario, senha, tipo, cargo, empresa_id, unidade_id) 
+                  VALUES (:nome, :email, :usuario, :senha, 'funcionario', :cargo, :empresa_id, :unidade_id)";
         
         $stmt = $db->prepare($query);
         
@@ -103,6 +125,8 @@ function criarFuncionario() {
         $stmt->bindParam(":usuario", $data->usuario);
         $stmt->bindParam(":senha", $senha_hash);
         $stmt->bindParam(":cargo", $data->cargo);
+        $stmt->bindParam(":empresa_id", $empresa_id);
+        $stmt->bindParam(":unidade_id", $data->unidade_id);
         
         if ($stmt->execute()) {
             $funcionario_id = $db->lastInsertId();
@@ -129,10 +153,26 @@ function atualizarFuncionario() {
         validarCampoObrigatorio($data->nome, "nome");
         validarCampoObrigatorio($data->email, "email");
         validarCampoObrigatorio($data->cargo, "cargo");
+        validarCampoObrigatorio($data->unidade_id, "unidade");
         
         if (!validarEmail($data->email)) {
             throw new Exception("Email inválido");
         }
+        
+        // Verificar se unidade existe
+        $query_unidade = "SELECT un.id, un.empresa_id 
+                          FROM unidades un 
+                          WHERE un.id = :unidade_id AND un.ativo = TRUE";
+        $stmt_unidade = $db->prepare($query_unidade);
+        $stmt_unidade->bindParam(":unidade_id", $data->unidade_id);
+        $stmt_unidade->execute();
+        
+        if ($stmt_unidade->rowCount() == 0) {
+            throw new Exception("Unidade não encontrada");
+        }
+        
+        $unidade_info = $stmt_unidade->fetch(PDO::FETCH_ASSOC);
+        $empresa_id = $unidade_info['empresa_id'];
         
         // Verificar se email já existe para outro usuário
         $query_check = "SELECT id FROM usuarios WHERE email = :email AND id != :id";
@@ -147,7 +187,8 @@ function atualizarFuncionario() {
         
         // Atualizar funcionário
         $query = "UPDATE usuarios 
-                  SET nome = :nome, email = :email, cargo = :cargo 
+                  SET nome = :nome, email = :email, cargo = :cargo, 
+                      empresa_id = :empresa_id, unidade_id = :unidade_id 
                   WHERE id = :id";
         
         $stmt = $db->prepare($query);
@@ -155,6 +196,8 @@ function atualizarFuncionario() {
         $stmt->bindParam(":nome", $data->nome);
         $stmt->bindParam(":email", $data->email);
         $stmt->bindParam(":cargo", $data->cargo);
+        $stmt->bindParam(":empresa_id", $empresa_id);
+        $stmt->bindParam(":unidade_id", $data->unidade_id);
         $stmt->bindParam(":id", $data->id);
         
         if ($stmt->execute()) {

@@ -34,11 +34,14 @@ function listarArmazens() {
     global $db;
     
     $query = "SELECT a.id, a.nome, a.codigo, a.localizacao, a.descricao, a.ativo, a.criado_em,
-                     e.nome as empresa_nome, e.id as empresa_id
+                     e.nome as empresa_nome, e.id as empresa_id,
+                     un.nome as unidade_nome, un.id as unidade_id,
+                     CONCAT(un.cidade, '/', un.estado) as unidade_localizacao
               FROM armazens a
-              LEFT JOIN empresas e ON a.empresa_id = e.id
+              LEFT JOIN unidades un ON a.unidade_id = un.id
+              LEFT JOIN empresas e ON un.empresa_id = e.id
               WHERE a.ativo = TRUE 
-              ORDER BY a.nome";
+              ORDER BY e.nome, un.nome, a.nome";
     
     $stmt = $db->prepare($query);
     $stmt->execute();
@@ -54,6 +57,9 @@ function listarArmazens() {
             "descricao" => $row['descricao'],
             "empresa_id" => $row['empresa_id'],
             "empresa_nome" => $row['empresa_nome'],
+            "unidade_id" => $row['unidade_id'],
+            "unidade_nome" => $row['unidade_nome'],
+            "unidade_localizacao" => $row['unidade_localizacao'],
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
         );
@@ -71,6 +77,22 @@ function criarArmazem() {
         validarCampoObrigatorio($data->nome, "nome");
         validarCampoObrigatorio($data->codigo, "código");
         validarCampoObrigatorio($data->localizacao, "localização");
+        validarCampoObrigatorio($data->unidade_id, "unidade");
+        
+        // Verificar se unidade existe
+        $query_unidade = "SELECT un.id, un.empresa_id 
+                          FROM unidades un 
+                          WHERE un.id = :unidade_id AND un.ativo = TRUE";
+        $stmt_unidade = $db->prepare($query_unidade);
+        $stmt_unidade->bindParam(":unidade_id", $data->unidade_id);
+        $stmt_unidade->execute();
+        
+        if ($stmt_unidade->rowCount() == 0) {
+            throw new Exception("Unidade não encontrada");
+        }
+        
+        $unidade_info = $stmt_unidade->fetch(PDO::FETCH_ASSOC);
+        $empresa_id = $unidade_info['empresa_id'];
         
         // Verificar se código já existe
         $query_check = "SELECT id FROM armazens WHERE codigo = :codigo";
@@ -83,8 +105,8 @@ function criarArmazem() {
         }
         
         // Criar armazém
-        $query = "INSERT INTO armazens (nome, codigo, localizacao, descricao) 
-                  VALUES (:nome, :codigo, :localizacao, :descricao)";
+        $query = "INSERT INTO armazens (nome, codigo, localizacao, descricao, empresa_id, unidade_id) 
+                  VALUES (:nome, :codigo, :localizacao, :descricao, :empresa_id, :unidade_id)";
         
         $stmt = $db->prepare($query);
         
@@ -94,6 +116,8 @@ function criarArmazem() {
         $stmt->bindParam(":codigo", $data->codigo);
         $stmt->bindParam(":localizacao", $data->localizacao);
         $stmt->bindParam(":descricao", $descricao);
+        $stmt->bindParam(":empresa_id", $empresa_id);
+        $stmt->bindParam(":unidade_id", $data->unidade_id);
         
         if ($stmt->execute()) {
             $armazem_id = $db->lastInsertId();
@@ -120,6 +144,22 @@ function atualizarArmazem() {
         validarCampoObrigatorio($data->nome, "nome");
         validarCampoObrigatorio($data->codigo, "código");
         validarCampoObrigatorio($data->localizacao, "localização");
+        validarCampoObrigatorio($data->unidade_id, "unidade");
+        
+        // Verificar se unidade existe
+        $query_unidade = "SELECT un.id, un.empresa_id 
+                          FROM unidades un 
+                          WHERE un.id = :unidade_id AND un.ativo = TRUE";
+        $stmt_unidade = $db->prepare($query_unidade);
+        $stmt_unidade->bindParam(":unidade_id", $data->unidade_id);
+        $stmt_unidade->execute();
+        
+        if ($stmt_unidade->rowCount() == 0) {
+            throw new Exception("Unidade não encontrada");
+        }
+        
+        $unidade_info = $stmt_unidade->fetch(PDO::FETCH_ASSOC);
+        $empresa_id = $unidade_info['empresa_id'];
         
         // Verificar se código já existe para outro armazém
         $query_check = "SELECT id FROM armazens WHERE codigo = :codigo AND id != :id";
@@ -134,7 +174,8 @@ function atualizarArmazem() {
         
         // Atualizar armazém
         $query = "UPDATE armazens 
-                  SET nome = :nome, codigo = :codigo, localizacao = :localizacao, descricao = :descricao 
+                  SET nome = :nome, codigo = :codigo, localizacao = :localizacao, 
+                      descricao = :descricao, empresa_id = :empresa_id, unidade_id = :unidade_id 
                   WHERE id = :id";
         
         $stmt = $db->prepare($query);
@@ -145,6 +186,8 @@ function atualizarArmazem() {
         $stmt->bindParam(":codigo", $data->codigo);
         $stmt->bindParam(":localizacao", $data->localizacao);
         $stmt->bindParam(":descricao", $descricao);
+        $stmt->bindParam(":empresa_id", $empresa_id);
+        $stmt->bindParam(":unidade_id", $data->unidade_id);
         $stmt->bindParam(":id", $data->id);
         
         if ($stmt->execute()) {
