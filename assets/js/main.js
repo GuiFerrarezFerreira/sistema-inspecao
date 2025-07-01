@@ -610,6 +610,27 @@ async function iniciarInspecao(checklistId) {
                         <div id="observacao-${item.item_id}" style="display: block; margin-top: 10px;">
                             <textarea placeholder="Descreva o problema..." rows="3" style="width: 100%">${item.observacoes || ''}</textarea>
                         </div>
+                        
+                        <div class="avaria-container" id="avaria-${item.item_id}" style="margin-top: 15px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+                            <h4 style="margin: 0 0 10px 0; color: #856404;">Registrar Avaria</h4>
+                            <div class="form-group">
+                                <label>Observações sobre a avaria:</label>
+                                <textarea id="avaria-obs-${item.item_id}" placeholder="Descreva detalhadamente a avaria encontrada..." rows="3" style="width: 100%;"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Fotos da avaria:</label>
+                                <input type="file" id="avaria-foto-${item.item_id}" accept="image/*" multiple style="display: none;" onchange="previewFotos(${item.item_id})">
+                                <button type="button" onclick="document.getElementById('avaria-foto-${item.item_id}').click()" class="btn-secondary">
+                                    📷 Adicionar Fotos
+                                </button>
+                                <div id="preview-fotos-${item.item_id}" class="foto-preview-container" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                                    <!-- Fotos serão mostradas aqui -->
+                                </div>
+                            </div>
+                            <button type="button" onclick="salvarAvaria(${item.item_id})" class="btn-primary" style="margin-top: 10px;">
+                                Salvar Avaria
+                            </button>
+                        </div>
                     </div>
                 `).join('')}
                 <button onclick="finalizarInspecao(${inspecaoId})" class="btn-success" style="margin-top: 20px;">
@@ -617,6 +638,12 @@ async function iniciarInspecao(checklistId) {
                 </button>
             `;
 
+            // Carregar avarias existentes
+            for (const item of itens) {
+                if (item.status) {
+                    carregarAvaria(inspecaoId, item.item_id);
+                }
+            }
             document.getElementById('inspecaoContent').innerHTML = html;
             showModal('modalInspecao');
         }
@@ -944,6 +971,10 @@ async function visualizarInspecao(inspecaoId) {
                         <div class="resumo-numero" style="color: #3498db;">${resumo.taxa_conformidade}%</div>
                         <div class="resumo-label">Conformidade</div>
                     </div>
+                    <div class="resumo-item">
+                        <div class="resumo-numero" style="color: #f39c12;">${resumo.total_avarias || 0}</div>
+                        <div class="resumo-label">Avarias</div>
+                    </div>
                 </div>
                 
                 <div class="itens-inspecionados">
@@ -960,6 +991,25 @@ async function visualizarInspecao(inspecaoId) {
                                 ${item.observacoes ? `
                                     <div class="observacoes-box">
                                         <strong>Observações:</strong> ${item.observacoes}
+                                    </div>
+                                ` : ''}
+                                ${item.tem_avaria && item.avaria ? `
+                                    <div class="avaria-info" style="margin-top: 10px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+                                        <h5 style="margin: 0 0 5px 0; color: #856404;">🔧 Avaria Registrada</h5>
+                                        ${item.avaria.observacoes ? `<p style="margin: 5px 0;"><strong>Descrição:</strong> ${item.avaria.observacoes}</p>` : ''}
+                                        ${item.avaria.fotos && item.avaria.fotos.length > 0 ? `
+                                            <div style="margin-top: 10px;">
+                                                <strong>Fotos (${item.avaria.fotos.length}):</strong>
+                                                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
+                                                    ${item.avaria.fotos.map(foto => `
+                                                        <img src="${foto.url}" 
+                                                             style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid #ffeaa7;" 
+                                                             onclick="window.open('${foto.url}', '_blank')"
+                                                             title="Clique para ampliar">
+                                                    `).join('')}
+                                                </div>
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 ` : ''}
                             </div>
@@ -1156,6 +1206,185 @@ async function excluirChecklist(id) {
         } catch (error) {
             console.error('Erro:', error);
         }
+    }
+}
+
+// Variável global para armazenar fotos
+let fotosParaUpload = {};
+
+function previewFotos(itemId) {
+    const input = document.getElementById(`avaria-foto-${itemId}`);
+    const preview = document.getElementById(`preview-fotos-${itemId}`);
+    
+    if (!fotosParaUpload[itemId]) {
+        fotosParaUpload[itemId] = [];
+    }
+    
+    Array.from(input.files).forEach(file => {
+        if (file.type.startsWith('image/')) {
+            fotosParaUpload[itemId].push(file);
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const div = document.createElement('div');
+                div.style.position = 'relative';
+                div.innerHTML = `
+                    <img src="${e.target.result}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">
+                    <button onclick="removerFotoPreview(${itemId}, ${fotosParaUpload[itemId].length - 1})" 
+                            style="position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer;">
+                        ×
+                    </button>
+                `;
+                preview.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+}
+
+function removerFotoPreview(itemId, index) {
+    fotosParaUpload[itemId].splice(index, 1);
+    atualizarPreviewFotos(itemId);
+}
+
+function atualizarPreviewFotos(itemId) {
+    const preview = document.getElementById(`preview-fotos-${itemId}`);
+    preview.innerHTML = '';
+    
+    fotosParaUpload[itemId].forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const div = document.createElement('div');
+            div.style.position = 'relative';
+            div.innerHTML = `
+                <img src="${e.target.result}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">
+                <button onclick="removerFotoPreview(${itemId}, ${index})" 
+                        style="position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer;">
+                    ×
+                </button>
+            `;
+            preview.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function salvarAvaria(itemId) {
+    const itemEl = document.getElementById(`item-${itemId}`);
+    const inspecaoId = itemEl.dataset.inspecao;
+    const observacoes = document.getElementById(`avaria-obs-${itemId}`).value;
+    const fotos = fotosParaUpload[itemId] || [];
+    
+    if (!observacoes.trim() && fotos.length === 0) {
+        alert('Por favor, adicione observações ou fotos da avaria');
+        return;
+    }
+    
+    try {
+        // Primeiro salvar as observações
+        const response = await fetch('api/avarias.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                inspecao_id: inspecaoId,
+                item_id: itemId,
+                observacoes: observacoes,
+                tem_fotos: fotos.length > 0
+            })
+        });
+        
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.message);
+        }
+        
+        // Upload das fotos
+        for (const foto of fotos) {
+            const formData = new FormData();
+            formData.append('inspecao_id', inspecaoId);
+            formData.append('item_id', itemId);
+            formData.append('foto', foto);
+            
+            await fetch('api/avarias.php?upload_foto=1', {
+                method: 'POST',
+                body: formData
+            });
+        }
+        
+        alert('Avaria registrada com sucesso!');
+        
+        // Limpar formulário
+        document.getElementById(`avaria-obs-${itemId}`).value = '';
+        document.getElementById(`preview-fotos-${itemId}`).innerHTML = '';
+        fotosParaUpload[itemId] = [];
+        
+        // Marcar item como tendo avaria
+        itemEl.classList.add('tem-avaria');
+        
+    } catch (error) {
+        console.error('Erro ao salvar avaria:', error);
+        alert('Erro ao salvar avaria: ' + error.message);
+    }
+}
+
+async function carregarAvaria(inspecaoId, itemId) {
+    try {
+        const response = await fetch(`api/avarias.php?inspecao_id=${inspecaoId}&item_id=${itemId}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const avaria = result.data;
+            
+            // Preencher observações
+            const obsTextarea = document.getElementById(`avaria-obs-${itemId}`);
+            if (obsTextarea) {
+                obsTextarea.value = avaria.observacoes || '';
+            }
+            
+            // Mostrar fotos existentes
+            if (avaria.fotos && avaria.fotos.length > 0) {
+                const preview = document.getElementById(`preview-fotos-${itemId}`);
+                if (preview) {
+                    preview.innerHTML = avaria.fotos.map(foto => `
+                        <div style="position: relative;">
+                            <img src="${foto.url}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px; cursor: pointer;" 
+                                 onclick="window.open('${foto.url}', '_blank')">
+                            <button onclick="excluirFotoAvaria(${foto.id}, ${itemId})" 
+                                    style="position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer;">
+                                ×
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar avaria:', error);
+    }
+}
+
+async function excluirFotoAvaria(fotoId, itemId) {
+    if (!confirm('Deseja realmente excluir esta foto?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`api/avarias.php?foto_id=${fotoId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            // Recarregar avarias
+            const itemEl = document.getElementById(`item-${itemId}`);
+            const inspecaoId = itemEl.dataset.inspecao;
+            carregarAvaria(inspecaoId, itemId);
+        } else {
+            alert('Erro ao excluir foto: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Erro ao excluir foto:', error);
+        alert('Erro ao excluir foto');
     }
 }
 

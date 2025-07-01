@@ -495,3 +495,75 @@ button:hover {
         display: none;
     }
 }
+
+}
+
+/* Estilos para avarias */
+.avaria-container {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.avaria-container h4 {
+    color: #856404;
+    margin: 0 0 10px 0;
+    font-size: 16px;
+}
+
+.foto-preview-container {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.foto-preview-container > div {
+    position: relative;
+}
+
+.foto-preview-container img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 2px solid #ddd;
+    cursor: pointer;
+}
+
+.foto-preview-container img:hover {
+    border-color: #3498db;
+}
+
+.checklist-item.tem-avaria {
+    border-left: 4px solid #f39c12;
+}
+
+.avaria-indicator {
+    background-color: #f39c12;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+/* Botão de upload de foto */
+.btn-upload-foto {
+    background-color: #9b59b6;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-upload-foto:hover {
+    background-color: #8e44ad;
+}

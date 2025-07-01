@@ -42,9 +42,8 @@ try {
     
     $inspecao = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    // Buscar itens inspecionados
     $query_itens = "SELECT 
-                    ir.item_id, ir.status, ir.observacoes, ir.data_verificacao, ir.qr_code_lido,
+                    ir.item_id, ir.status, ir.observacoes, ir.data_verificacao, ir.qr_code_lido, ir.tem_avaria,
                     ii.nome as item_nome, ii.descricao as item_descricao, ii.criterios_inspecao
                     FROM inspecao_resultados ir
                     INNER JOIN itens_inspecao ii ON ir.item_id = ii.id
@@ -58,8 +57,49 @@ try {
     $itens = array();
     $total_ok = 0;
     $total_problema = 0;
+    $total_avarias = 0;
     
     while ($row = $stmt_itens->fetch(PDO::FETCH_ASSOC)) {
+        // Buscar informações de avaria se houver
+        $avaria = null;
+        if ($row['tem_avaria']) {
+            $query_avaria = "SELECT a.*, 
+                            (SELECT COUNT(*) FROM inspecao_avaria_fotos WHERE avaria_id = a.id) as total_fotos
+                            FROM inspecao_avarias a
+                            WHERE a.inspecao_id = :inspecao_id AND a.item_id = :item_id
+                            LIMIT 1";
+            
+            $stmt_avaria = $db->prepare($query_avaria);
+            $stmt_avaria->bindParam(":inspecao_id", $inspecao_id);
+            $stmt_avaria->bindParam(":item_id", $row['item_id']);
+            $stmt_avaria->execute();
+            
+            if ($stmt_avaria->rowCount() > 0) {
+                $avaria = $stmt_avaria->fetch(PDO::FETCH_ASSOC);
+                
+                // Buscar fotos da avaria
+                $query_fotos = "SELECT id, nome_arquivo FROM inspecao_avaria_fotos 
+                               WHERE avaria_id = :avaria_id 
+                               ORDER BY criado_em";
+                
+                $stmt_fotos = $db->prepare($query_fotos);
+                $stmt_fotos->bindParam(":avaria_id", $avaria['id']);
+                $stmt_fotos->execute();
+                
+                $fotos = array();
+                while ($foto = $stmt_fotos->fetch(PDO::FETCH_ASSOC)) {
+                    $fotos[] = array(
+                        "id" => $foto['id'],
+                        "nome_arquivo" => $foto['nome_arquivo'],
+                        "url" => "/uploads/avarias/" . $foto['nome_arquivo']
+                    );
+                }
+                
+                $avaria['fotos'] = $fotos;
+                $total_avarias++;
+            }
+        }
+        
         $itens[] = array(
             "item_id" => $row['item_id'],
             "item_nome" => $row['item_nome'],
@@ -68,7 +108,9 @@ try {
             "status" => $row['status'],
             "observacoes" => $row['observacoes'],
             "data_verificacao" => $row['data_verificacao'],
-            "qr_code_lido" => $row['qr_code_lido']
+            "qr_code_lido" => $row['qr_code_lido'],
+            "tem_avaria" => $row['tem_avaria'],
+            "avaria" => $avaria
         );
         
         if ($row['status'] == 'ok') {
@@ -114,6 +156,7 @@ try {
             "total_itens" => count($itens),
             "itens_ok" => $total_ok,
             "itens_problema" => $total_problema,
+            "total_avarias" => $total_avarias,
             "taxa_conformidade" => count($itens) > 0 ? round(($total_ok / count($itens)) * 100, 2) : 0
         ),
         "itens" => $itens
