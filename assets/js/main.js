@@ -5,6 +5,7 @@ let scanner = null;
 let currentChecklistId = null;
 let currentItemId = null;
 let criteriosContador = 0;
+let fotosParaUpload = {};
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
@@ -216,6 +217,15 @@ document.getElementById('formChecklist')?.addEventListener('submit', async (e) =
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData);
     
+    // Coletar funcionários selecionados
+    const checkboxesFuncionarios = document.querySelectorAll('#funcionariosCheckboxes input[type="checkbox"]:checked');
+    data.funcionarios_ids = Array.from(checkboxesFuncionarios).map(cb => cb.value);
+
+    if (data.funcionarios_ids.length === 0) {
+        alert('Selecione pelo menos um funcionário responsável!');
+        return;
+    }
+    
     // Coletar itens selecionados
     const checkboxes = document.querySelectorAll('#itensCheckboxes input[type="checkbox"]:checked');
     data.itens = Array.from(checkboxes).map(cb => cb.value);
@@ -259,9 +269,10 @@ function carregarDados() {
     carregarItens();
     carregarChecklists();
     carregarInspecoes();
+    carregarDocumentos();
 }
 
-// NOVA FUNÇÃO PARA CARREGAR UNIDADES POR EMPRESA
+// FUNÇÃO PARA CARREGAR UNIDADES POR EMPRESA
 async function carregarUnidadesPorEmpresa(contexto) {
     const empresaId = document.getElementById(`${contexto}_empresa_id`).value;
     const selectUnidade = document.getElementById(`${contexto}_unidade_id`);
@@ -484,7 +495,7 @@ async function carregarChecklists() {
                 <div class="card">
                     <h3>${c.nome}</h3>
                     <p>Armazém: ${c.armazem_nome}</p>
-                    <p>Responsável: ${c.funcionario_nome}</p>
+                    <p>Responsáveis: ${c.responsaveis_nomes || 'Não definidos'}</p>
                     <p>Periodicidade: ${c.periodicidade}</p>
                     <p>Total de itens: ${c.total_itens}</p>
                     <div class="actions">
@@ -497,20 +508,56 @@ async function carregarChecklists() {
 
             document.getElementById('checklistsList').innerHTML = html;
 
-            // Atualizar select de funcionários
-            const selectFuncionario = document.querySelector('select[name="funcionario_id"]');
-            if (selectFuncionario) {
-                const funcionariosResponse = await fetch('api/funcionarios.php');
-                const funcionariosResult = await funcionariosResponse.json();
-                
-                if (funcionariosResult.success && funcionariosResult.data) {
-                    selectFuncionario.innerHTML = '<option value="">Selecione...</option>' +
-                        funcionariosResult.data.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
-                }
-            }
+            // Atualizar checkboxes de funcionários
+            await carregarFuncionariosCheckboxes();
         }
     } catch (error) {
         console.error('Erro ao carregar checklists:', error);
+    }
+}
+
+// Nova função para carregar checkboxes de funcionários
+async function carregarFuncionariosCheckboxes() {
+    try {
+        const response = await fetch('api/funcionarios.php');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            // Agrupar por empresa/unidade
+            const funcionariosPorEmpresa = {};
+            
+            result.data.forEach(f => {
+                const key = f.empresa_nome || 'Sem empresa';
+                if (!funcionariosPorEmpresa[key]) {
+                    funcionariosPorEmpresa[key] = [];
+                }
+                funcionariosPorEmpresa[key].push(f);
+            });
+            
+            let html = '';
+            for (const empresa in funcionariosPorEmpresa) {
+                html += `<div style="margin-bottom: 15px;">
+                    <strong>${empresa}</strong><br>`;
+                
+                funcionariosPorEmpresa[empresa].forEach(f => {
+                    html += `
+                        <label style="display: block; margin: 5px 0 5px 20px;">
+                            <input type="checkbox" name="funcionarios_ids[]" value="${f.id}">
+                            ${f.nome} - ${f.cargo}
+                        </label>
+                    `;
+                });
+                
+                html += '</div>';
+            }
+            
+            const container = document.getElementById('funcionariosCheckboxes');
+            if (container) {
+                container.innerHTML = html;
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar funcionários:', error);
     }
 }
 
@@ -650,11 +697,11 @@ async function iniciarInspecao(checklistId) {
                             </button>
                         </div>
                         <div id="observacao-${item.item_id}" style="display: block; margin-top: 10px;">
-                            <textarea placeholder="Descreva o problema..." rows="3" style="width: 100%">${item.observacoes || ''}</textarea>
+                            <textarea placeholder="Observações..." rows="3" style="width: 100%">${item.observacoes || ''}</textarea>
                         </div>
                         
-                        <div class="avaria-container" id="avaria-${item.item_id}" style="margin-top: 15px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
-                            <h4 style="margin: 0 0 10px 0; color: #856404;">Registrar Avaria</h4>
+                        <div class="avaria-container" id="avaria-${item.item_id}">
+                            <h4>Registrar Avaria</h4>
                             <div class="form-group">
                                 <label>Observações sobre a avaria:</label>
                                 <textarea id="avaria-obs-${item.item_id}" placeholder="Descreva detalhadamente a avaria encontrada..." rows="3" style="width: 100%;"></textarea>
@@ -665,7 +712,7 @@ async function iniciarInspecao(checklistId) {
                                 <button type="button" onclick="document.getElementById('avaria-foto-${item.item_id}').click()" class="btn-secondary">
                                     📷 Adicionar Fotos
                                 </button>
-                                <div id="preview-fotos-${item.item_id}" class="foto-preview-container" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                                <div id="preview-fotos-${item.item_id}" class="foto-preview-container">
                                     <!-- Fotos serão mostradas aqui -->
                                 </div>
                             </div>
@@ -1289,9 +1336,7 @@ async function excluirChecklist(id) {
     }
 }
 
-// Variável global para armazenar fotos
-let fotosParaUpload = {};
-
+// Funções para avarias
 function previewFotos(itemId) {
     const input = document.getElementById(`avaria-foto-${itemId}`);
     const preview = document.getElementById(`preview-fotos-${itemId}`);
@@ -1468,6 +1513,115 @@ async function excluirFotoAvaria(fotoId, itemId) {
     }
 }
 
+// Funções para Documentos PDF
+document.getElementById('formDocumentoPDF')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    
+    try {
+        const response = await fetch('api/documentos-pdf.php', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            alert('Documento enviado com sucesso!');
+            closeModal('modalDocumentoPDF');
+            carregarDocumentos();
+            if (result.data && result.data.id) {
+                verQRCodePDF(result.data.id);
+            }
+            e.target.reset();
+        } else {
+            alert(result.message || 'Erro ao enviar documento');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao enviar documento');
+    }
+});
+
+async function carregarDocumentos() {
+    try {
+        const response = await fetch('api/documentos-pdf.php');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const html = result.data.map(d => `
+                <div class="card">
+                    <h3>${d.nome}</h3>
+                    ${d.descricao ? `<p>${d.descricao}</p>` : ''}
+                    <p><strong>Empresa:</strong> ${d.empresa_nome || 'Todas'}</p>
+                    <p><strong>Enviado por:</strong> ${d.criado_por_nome}</p>
+                    <p><strong>Data:</strong> ${formatarDataHora(d.criado_em)}</p>
+                    <p><strong>Tamanho:</strong> ${formatarTamanhoArquivo(d.tamanho)}</p>
+                    <div class="actions">
+                        <button onclick="verQRCodePDF(${d.id})" class="btn-primary">Ver QR Code</button>
+                        <button onclick="baixarPDF(${d.id})" class="btn-secondary">Baixar PDF</button>
+                        <button onclick="excluirDocumento(${d.id})" class="btn-danger">Excluir</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('documentosList').innerHTML = html || '<p>Nenhum documento cadastrado.</p>';
+            
+            // Atualizar select de empresas no modal
+            const selectEmpresa = document.querySelector('#modalDocumentoPDF select[name="empresa_id"]');
+            if (selectEmpresa) {
+                const empresasResponse = await fetch('api/empresas.php');
+                const empresasResult = await empresasResponse.json();
+                
+                if (empresasResult.success && empresasResult.data) {
+                    selectEmpresa.innerHTML = '<option value="">Todas as empresas</option>' +
+                        empresasResult.data.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar documentos:', error);
+    }
+}
+
+function verQRCodePDF(documentoId) {
+    window.open(`api/qrcode-pdf.php?documento_id=${documentoId}`, '_blank');
+}
+
+function baixarPDF(documentoId) {
+    window.open(`api/documentos-pdf.php?download=${documentoId}`, '_blank');
+}
+
+async function excluirDocumento(id) {
+    if (confirm('Deseja realmente excluir este documento?')) {
+        try {
+            const response = await fetch('api/documentos-pdf.php', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: id })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Documento excluído com sucesso!');
+                carregarDocumentos();
+            } else {
+                alert(result.message || 'Erro ao excluir documento');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+}
+
+function formatarTamanhoArquivo(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 // Funções de edição (placeholder)
 function editarEmpresa(id) {
     alert('Função de edição será implementada');
@@ -1507,7 +1661,17 @@ function capitalize(text) {
 
 // Função para imprimir relatório de inspeção
 function imprimirInspecao() {
+    // Adicionar classe temporária para impressão
+    const modal = document.getElementById('modalVisualizarInspecao');
+    modal.classList.add('print-area');
+    
+    // Imprimir
     window.print();
+    
+    // Remover classe após impressão
+    setTimeout(() => {
+        modal.classList.remove('print-area');
+    }, 1000);
 }
 
 // Função para atualizar filtros de inspeção

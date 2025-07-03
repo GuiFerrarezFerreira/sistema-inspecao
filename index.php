@@ -76,7 +76,8 @@ $usuario_id = $_SESSION['usuario_id'];
                     <button class="tab" onclick="showTab('itens')">Itens</button>
                     <button class="tab" onclick="showTab('checklists')">Checklists</button>
                     <button class="tab" onclick="showTab('relatorios')">Relatórios</button>
-                    <button class="tab" onclick="showTab('inspecoes')">Inspeções</button>                    
+                    <button class="tab" onclick="showTab('inspecoes')">Inspeções</button>
+                    <button class="tab" onclick="showTab('documentos')">Documentos PDF</button>
                 </div>
 
                 <!-- Tab Empresas -->
@@ -166,7 +167,14 @@ $usuario_id = $_SESSION['usuario_id'];
                     </div>
                     
                     <div id="inspecoesList" class="grid"></div>
-                </div>                
+                </div>
+
+                <!-- Tab Documentos PDF -->
+                <div id="tab-documentos" class="tab-content">
+                    <h2>Documentos PDF</h2>
+                    <button onclick="showModal('modalDocumentoPDF')" class="btn-success">+ Novo Documento</button>
+                    <div id="documentosList" class="grid"></div>
+                </div>
             </div>
             <?php else: ?>
             <!-- Área do Funcionário -->
@@ -416,10 +424,10 @@ $usuario_id = $_SESSION['usuario_id'];
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Funcionário Responsável:</label>
-                    <select name="funcionario_id" required>
-                        <option value="">Selecione...</option>
-                    </select>
+                    <label>Funcionários Responsáveis:</label>
+                    <div id="funcionariosCheckboxes" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                        <!-- Será preenchido dinamicamente -->
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Periodicidade:</label>
@@ -448,7 +456,36 @@ $usuario_id = $_SESSION['usuario_id'];
                 <!-- Conteúdo será carregado dinamicamente -->
             </div>
         </div>
-    </div>    
+    </div>
+
+    <!-- Modal Documento PDF -->
+    <div id="modalDocumentoPDF" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('modalDocumentoPDF')">&times;</span>
+            <h2>Upload de Documento PDF</h2>
+            <form id="formDocumentoPDF" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>Nome do Documento:</label>
+                    <input type="text" name="nome" required>
+                </div>
+                <div class="form-group">
+                    <label>Descrição:</label>
+                    <textarea name="descricao" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Empresa:</label>
+                    <select name="empresa_id">
+                        <option value="">Todas as empresas</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Arquivo PDF:</label>
+                    <input type="file" name="arquivo" accept="application/pdf" required>
+                </div>
+                <button type="submit">Enviar Documento</button>
+            </form>
+        </div>
+    </div>
     <?php endif; ?>
 
     <!-- Modal Realizar Inspeção -->

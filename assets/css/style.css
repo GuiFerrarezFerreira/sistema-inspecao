@@ -109,6 +109,14 @@ button:hover {
     background-color: #27ae60;
 }
 
+.btn-primary {
+    background-color: #3498db;
+}
+
+.btn-primary:hover {
+    background-color: #2980b9;
+}
+
 .tabs {
     display: flex;
     border-bottom: 2px solid #3498db;
@@ -231,6 +239,14 @@ button:hover {
     color: #2c3e50;
 }
 
+.checklist-item.status-ok {
+    border-left: 4px solid #2ecc71;
+}
+
+.checklist-item.status-problem {
+    border-left: 4px solid #e74c3c;
+}
+
 .status-buttons {
     display: flex;
     gap: 10px;
@@ -288,48 +304,7 @@ button:hover {
     border: 1px solid #bee5eb;
 }
 
-@media (max-width: 768px) {
-    .grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .tabs {
-        flex-direction: column;
-    }
-    
-    .modal-content {
-        width: 95%;
-        margin: 20px auto;
-        padding: 20px;
-    }
-}
-
-.print-button {
-    background-color: #9b59b6;
-    margin-top: 10px;
-}
-
-.print-button:hover {
-    background-color: #8e44ad;
-}
-
-@media print {
-    body * {
-        visibility: hidden;
-    }
-    
-    .print-area, .print-area * {
-        visibility: visible;
-    }
-    
-    .print-area {
-        position: absolute;
-        left: 0;
-        top: 0;
-    }
-}
-
-/* Estilos adicionais para visualização de inspeção */
+/* Estilos para visualização de inspeção */
 .inspecao-header {
     background-color: #f8f9fa;
     padding: 20px;
@@ -479,92 +454,12 @@ button:hover {
     background-color: #8e44ad;
 }
 
-@media print {
-    .modal {
-        position: static;
-        background: none;
-    }
-    
-    .modal-content {
-        box-shadow: none;
-        margin: 0;
-        max-width: 100%;
-    }
-    
-    .close, .btn-imprimir {
-        display: none;
-    }
-}
-
-}
-
-/* Estilos para avarias */
-.avaria-container {
-    background-color: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 8px;
-    padding: 15px;
-    margin-top: 15px;
-}
-
-.avaria-container h4 {
-    color: #856404;
-    margin: 0 0 10px 0;
-    font-size: 16px;
-}
-
-.foto-preview-container {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+.print-button {
+    background-color: #9b59b6;
     margin-top: 10px;
 }
 
-.foto-preview-container > div {
-    position: relative;
-}
-
-.foto-preview-container img {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 4px;
-    border: 2px solid #ddd;
-    cursor: pointer;
-}
-
-.foto-preview-container img:hover {
-    border-color: #3498db;
-}
-
-.checklist-item.tem-avaria {
-    border-left: 4px solid #f39c12;
-}
-
-.avaria-indicator {
-    background-color: #f39c12;
-    color: white;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    margin-left: 10px;
-}
-
-/* Botão de upload de foto */
-.btn-upload-foto {
-    background-color: #9b59b6;
-    color: white;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.btn-upload-foto:hover {
+.print-button:hover {
     background-color: #8e44ad;
 }
 
@@ -673,4 +568,153 @@ button:hover {
 .item-resultado .item-status {
     min-width: 100px;
     text-align: center;
+}
+
+/* Estilos para múltiplos responsáveis */
+#funcionariosCheckboxes {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+#funcionariosCheckboxes label {
+    display: block;
+    margin: 5px 0;
+    font-weight: normal;
+}
+
+#funcionariosCheckboxes input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+/* Estilos responsivos */
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tabs {
+        flex-direction: column;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 20px auto;
+        padding: 20px;
+    }
+    
+    .inspecao-info {
+        grid-template-columns: 1fr;
+    }
+    
+    .resumo-inspecao {
+        flex-direction: column;
+        gap: 20px;
+    }
+}
+
+/* Estilos específicos para impressão */
+@media print {
+    @page {
+        size: A4;
+        margin: 20mm;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
+        font-size: 12pt;
+    }
+    
+    /* Ocultar elementos desnecessários */
+    header, .user-info, .tabs, .actions, button, .btn-imprimir, .no-print {
+        display: none !important;
+    }
+    
+    /* Modal de visualização de inspeção */
+    #modalVisualizarInspecao {
+        display: block !important;
+        position: static !important;
+        background: transparent !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+    
+    #modalVisualizarInspecao .modal-content {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: white !important;
+    }
+    
+    /* Garantir visibilidade do conteúdo */
+    #detalhesInspecao,
+    #detalhesInspecao * {
+        visibility: visible !important;
+        display: block !important;
+    }
+    
+    /* Ajustes de layout */
+    .inspecao-header {
+        margin-bottom: 20px;
+        page-break-inside: avoid;
+    }
+    
+    .resumo-inspecao {
+        margin: 20px 0;
+        page-break-inside: avoid;
+    }
+    
+    .item-resultado {
+        margin-bottom: 15px;
+        page-break-inside: avoid;
+        border: 1px solid #ddd;
+        padding: 10px;
+    }
+    
+    .observacoes-gerais {
+        margin-top: 30px;
+        page-break-inside: avoid;
+    }
+    
+    /* Imagens de avarias */
+    .avaria-info img {
+        max-width: 150px !important;
+        max-height: 150px !important;
+        page-break-inside: avoid;
+    }
+    
+    /* Cabeçalho de impressão */
+    .inspecao-header h3 {
+        font-size: 18pt;
+        margin-bottom: 15px;
+    }
+    
+    /* Informações em grid */
+    .inspecao-info {
+        display: block !important;
+    }
+    
+    .info-item {
+        display: inline-block;
+        width: 48%;
+        margin-bottom: 10px;
+    }
+    
+    /* Força visibilidade quando tem classe print-area */
+    .print-area,
+    .print-area * {
+        visibility: visible !important;
+    }
+    
+    /* QR Codes para impressão */
+    .qr-container {
+        page-break-inside: avoid;
+    }
 }

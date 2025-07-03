@@ -41,13 +41,17 @@ switch ($_SERVER['REQUEST_METHOD']) {
 function listarChecklists() {
     global $db;
     
-    $query = "SELECT c.id, c.nome, c.periodicidade, c.ativo, c.criado_em,
-                     a.nome as armazem_nome, a.id as armazem_id,
-                     u.nome as funcionario_nome, u.id as funcionario_id,
-                     COUNT(ci.id) as total_itens
+    $query = "SELECT 
+                c.id, 
+                c.nome, 
+                c.periodicidade, 
+                c.ativo, 
+                c.criado_em,
+                a.nome as armazem_nome, 
+                a.id as armazem_id,
+                COUNT(DISTINCT ci.id) as total_itens
               FROM checklists c
               INNER JOIN armazens a ON c.armazem_id = a.id
-              INNER JOIN usuarios u ON c.funcionario_id = u.id
               LEFT JOIN checklist_itens ci ON c.id = ci.checklist_id
               WHERE c.ativo = TRUE
               GROUP BY c.id
@@ -59,14 +63,35 @@ function listarChecklists() {
     $checklists = array();
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        // Buscar responsáveis
+        $query_resp = "SELECT u.id, u.nome 
+                       FROM checklist_responsaveis cr
+                       INNER JOIN usuarios u ON cr.funcionario_id = u.id
+                       WHERE cr.checklist_id = :checklist_id
+                       ORDER BY u.nome";
+        
+        $stmt_resp = $db->prepare($query_resp);
+        $stmt_resp->bindParam(":checklist_id", $row['id']);
+        $stmt_resp->execute();
+        
+        $responsaveis = array();
+        $responsaveis_nomes = array();
+        while ($resp = $stmt_resp->fetch(PDO::FETCH_ASSOC)) {
+            $responsaveis[] = array(
+                "id" => $resp['id'],
+                "nome" => $resp['nome']
+            );
+            $responsaveis_nomes[] = $resp['nome'];
+        }
+        
         $checklists[] = array(
             "id" => $row['id'],
             "nome" => $row['nome'],
             "periodicidade" => $row['periodicidade'],
             "armazem_id" => $row['armazem_id'],
             "armazem_nome" => $row['armazem_nome'],
-            "funcionario_id" => $row['funcionario_id'],
-            "funcionario_nome" => $row['funcionario_nome'],
+            "responsaveis" => $responsaveis,
+            "responsaveis_nomes" => implode(", ", $responsaveis_nomes),
             "total_itens" => $row['total_itens'],
             "ativo" => $row['ativo'],
             "criado_em" => $row['criado_em']
@@ -79,18 +104,22 @@ function listarChecklists() {
 function listarChecklistsFuncionario($funcionario_id) {
     global $db;
     
-    $query = "SELECT c.id, c.nome, c.periodicidade,
-                     a.nome as armazem_nome,
-                     COUNT(DISTINCT ci.id) as total_itens,
-                     COUNT(DISTINCT i.id) as inspecoes_pendentes,
-                     MAX(i.data_inicio) as ultima_inspecao
+    $query = "SELECT DISTINCT
+                c.id, 
+                c.nome, 
+                c.periodicidade,
+                a.nome as armazem_nome,
+                COUNT(DISTINCT ci.id) as total_itens,
+                COUNT(DISTINCT i.id) as inspecoes_pendentes,
+                MAX(i.data_inicio) as ultima_inspecao
               FROM checklists c
               INNER JOIN armazens a ON c.armazem_id = a.id
+              INNER JOIN checklist_responsaveis cr ON c.id = cr.checklist_id
               LEFT JOIN checklist_itens ci ON c.id = ci.checklist_id
               LEFT JOIN inspecoes i ON c.id = i.checklist_id 
                     AND i.funcionario_id = :funcionario_id 
                     AND i.status = 'em_andamento'
-              WHERE c.funcionario_id = :funcionario_id AND c.ativo = TRUE
+              WHERE cr.funcionario_id = :funcionario_id AND c.ativo = TRUE
               GROUP BY c.id
               ORDER BY c.nome";
     
@@ -128,8 +157,11 @@ function criarChecklist() {
     try {
         validarCampoObrigatorio($data->nome, "nome");
         validarCampoObrigatorio($data->armazem_id, "armazém");
-        validarCampoObrigatorio($data->funcionario_id, "funcionário");
         validarCampoObrigatorio($data->periodicidade, "periodicidade");
+        
+        if (!isset($data->funcionarios_ids) || count($data->funcionarios_ids) == 0) {
+            throw new Exception("Selecione pelo menos um funcionário responsável");
+        }
         
         if (!isset($data->itens) || count($data->itens) == 0) {
             throw new Exception("Selecione pelo menos um item para o checklist");
@@ -137,19 +169,30 @@ function criarChecklist() {
         
         $db->beginTransaction();
         
-        // Criar checklist
-        $query = "INSERT INTO checklists (nome, armazem_id, funcionario_id, periodicidade) 
-                  VALUES (:nome, :armazem_id, :funcionario_id, :periodicidade)";
+        // Criar checklist (sem funcionario_id)
+        $query = "INSERT INTO checklists (nome, armazem_id, periodicidade) 
+                  VALUES (:nome, :armazem_id, :periodicidade)";
         
         $stmt = $db->prepare($query);
         
         $stmt->bindParam(":nome", $data->nome);
         $stmt->bindParam(":armazem_id", $data->armazem_id);
-        $stmt->bindParam(":funcionario_id", $data->funcionario_id);
         $stmt->bindParam(":periodicidade", $data->periodicidade);
         
         $stmt->execute();
         $checklist_id = $db->lastInsertId();
+        
+        // Adicionar responsáveis
+        $query_resp = "INSERT INTO checklist_responsaveis (checklist_id, funcionario_id) 
+                       VALUES (:checklist_id, :funcionario_id)";
+        
+        $stmt_resp = $db->prepare($query_resp);
+        
+        foreach ($data->funcionarios_ids as $funcionario_id) {
+            $stmt_resp->bindParam(":checklist_id", $checklist_id);
+            $stmt_resp->bindParam(":funcionario_id", $funcionario_id);
+            $stmt_resp->execute();
+        }
         
         // Adicionar itens ao checklist
         $query_item = "INSERT INTO checklist_itens (checklist_id, item_id, qr_code_data) 
@@ -191,22 +234,46 @@ function atualizarChecklist() {
     try {
         validarCampoObrigatorio($data->id, "id");
         validarCampoObrigatorio($data->nome, "nome");
-        validarCampoObrigatorio($data->funcionario_id, "funcionário");
         validarCampoObrigatorio($data->periodicidade, "periodicidade");
+        
+        if (!isset($data->funcionarios_ids) || count($data->funcionarios_ids) == 0) {
+            throw new Exception("Selecione pelo menos um funcionário responsável");
+        }
+        
+        $db->beginTransaction();
         
         // Atualizar checklist
         $query = "UPDATE checklists 
-                  SET nome = :nome, funcionario_id = :funcionario_id, periodicidade = :periodicidade 
+                  SET nome = :nome, periodicidade = :periodicidade 
                   WHERE id = :id";
         
         $stmt = $db->prepare($query);
         
         $stmt->bindParam(":nome", $data->nome);
-        $stmt->bindParam(":funcionario_id", $data->funcionario_id);
         $stmt->bindParam(":periodicidade", $data->periodicidade);
         $stmt->bindParam(":id", $data->id);
         
         if ($stmt->execute()) {
+            // Remover responsáveis antigos
+            $query_delete = "DELETE FROM checklist_responsaveis WHERE checklist_id = :checklist_id";
+            $stmt_delete = $db->prepare($query_delete);
+            $stmt_delete->bindParam(":checklist_id", $data->id);
+            $stmt_delete->execute();
+            
+            // Adicionar novos responsáveis
+            $query_resp = "INSERT INTO checklist_responsaveis (checklist_id, funcionario_id) 
+                           VALUES (:checklist_id, :funcionario_id)";
+            
+            $stmt_resp = $db->prepare($query_resp);
+            
+            foreach ($data->funcionarios_ids as $funcionario_id) {
+                $stmt_resp->bindParam(":checklist_id", $data->id);
+                $stmt_resp->bindParam(":funcionario_id", $funcionario_id);
+                $stmt_resp->execute();
+            }
+            
+            $db->commit();
+            
             registrarLog($db, $usuario_id, 'ATUALIZAR_CHECKLIST', 'Checklist atualizado: ' . $data->nome, 'checklists', $data->id);
             
             enviarResposta(true, "Checklist atualizado com sucesso");
@@ -215,6 +282,7 @@ function atualizarChecklist() {
         }
         
     } catch (Exception $e) {
+        $db->rollBack();
         http_response_code(400);
         enviarResposta(false, $e->getMessage());
     }
