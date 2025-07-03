@@ -18,9 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET' || !isset($_GET['id'])) {
 $inspecao_id = $_GET['id'];
 
 try {
-    // Buscar dados gerais da inspeção
+
     $query = "SELECT 
               i.id, i.data_inicio, i.data_fim, i.status, i.observacoes_gerais,
+              i.latitude, i.longitude, i.precisao_metros, i.endereco_aproximado,
               c.nome as checklist_nome, c.periodicidade,
               a.nome as armazem_nome, a.codigo as armazem_codigo, a.localizacao as armazem_localizacao,
               u.nome as funcionario_nome, u.cargo as funcionario_cargo
@@ -44,6 +45,7 @@ try {
     
     $query_itens = "SELECT 
                     ir.item_id, ir.status, ir.observacoes, ir.data_verificacao, ir.qr_code_lido, ir.tem_avaria,
+                    ir.latitude, ir.longitude, ir.data_geolocalizacao,
                     ii.nome as item_nome, ii.descricao as item_descricao, ii.criterios_inspecao
                     FROM inspecao_resultados ir
                     INNER JOIN itens_inspecao ii ON ir.item_id = ii.id
@@ -110,7 +112,10 @@ try {
             "data_verificacao" => $row['data_verificacao'],
             "qr_code_lido" => $row['qr_code_lido'],
             "tem_avaria" => $row['tem_avaria'],
-            "avaria" => $avaria
+            "avaria" => $avaria,
+            "latitude" => $row['latitude'],
+            "longitude" => $row['longitude'],
+            "data_geolocalizacao" => $row['data_geolocalizacao']
         );
         
         if ($row['status'] == 'ok') {
@@ -150,7 +155,12 @@ try {
             "data_fim" => $inspecao['data_fim'],
             "status" => $inspecao['status'],
             "observacoes_gerais" => $inspecao['observacoes_gerais'],
-            "duracao" => $duracao
+            "duracao" => $duracao,
+            // Adicionar campos de geolocalização
+            "latitude" => $inspecao['latitude'],
+            "longitude" => $inspecao['longitude'],
+            "precisao_metros" => $inspecao['precisao_metros'],
+            "endereco_aproximado" => $inspecao['endereco_aproximado']
         ),
         "resumo" => array(
             "total_itens" => count($itens),

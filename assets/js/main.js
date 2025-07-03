@@ -6,9 +6,32 @@ let currentChecklistId = null;
 let currentItemId = null;
 let criteriosContador = 0;
 let fotosParaUpload = {};
+let localizacaoAtual = null;
+let watchId = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
+
+    // Verificar suporte a geolocalização
+    if ("geolocation" in navigator) {
+        console.log("Geolocalização disponível");
+        
+        // Verificar permissões (API moderna)
+        if ('permissions' in navigator) {
+            navigator.permissions.query({ name: 'geolocation' }).then(result => {
+                if (result.state === 'granted') {
+                    console.log('Permissão de localização já concedida');
+                } else if (result.state === 'prompt') {
+                    console.log('Permissão de localização será solicitada');
+                } else if (result.state === 'denied') {
+                    console.warn('Permissão de localização negada');
+                }
+            });
+        }
+    } else {
+        console.warn("Geolocalização NÃO disponível neste navegador");
+    }
+
     if (currentUser.tipo === 'admin') {
         carregarDados();
     } else {
@@ -642,14 +665,35 @@ function imprimirQRCodes() {
 async function iniciarInspecao(checklistId) {
     currentChecklistId = checklistId;
     
+    // Solicitar permissão de localização e obter posição inicial
     try {
-        // Iniciar ou continuar inspeção
+        await obterLocalizacao();
+        iniciarMonitoramentoLocalizacao();
+        
+        // Mostrar indicador de GPS ativo
+        mostrarIndicadorGPS(true);
+    } catch (error) {
+        console.error('Erro ao obter localização:', error);
+        if (!confirm('Não foi possível obter sua localização. Deseja continuar mesmo assim?')) {
+            return;
+        }
+    }
+    
+    try {
+        // Iniciar ou continuar inspeção com localização
         const iniciarResponse = await fetch('api/inspecoes.php?iniciar=1', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ checklist_id: checklistId })
+            body: JSON.stringify({ 
+                checklist_id: checklistId,
+                localizacao: localizacaoAtual 
+            })
         });
         const iniciarResult = await iniciarResponse.json();
+        
+        if (!iniciarResult.success) {
+            throw new Error(iniciarResult.message || 'Erro ao iniciar inspeção');
+        }
         
         // Buscar itens do checklist
         const response = await fetch(`api/inspecoes.php?checklist_id=${checklistId}`);
@@ -663,9 +707,21 @@ async function iniciarInspecao(checklistId) {
                 <div class="alert alert-info">
                     Escaneie o QR Code de cada item para realizar a inspeção
                 </div>
+                
+                ${localizacaoAtual ? `
+                    <div class="localizacao-info">
+                        <strong>📍 Localização atual:</strong> 
+                        Lat: ${localizacaoAtual.latitude}, 
+                        Lng: ${localizacaoAtual.longitude}
+                        (Precisão: ±${Math.round(localizacaoAtual.precisao)}m)
+                    </div>
+                ` : ''}
+                
                 ${itens.map(item => `
-                    <div class="checklist-item ${item.status ? `status-${item.status}` : ''}" id="item-${item.item_id}" data-inspecao="${inspecaoId}">
-                        <h4>${item.nome}</h4>
+                    <div class="checklist-item ${item.status ? `status-${item.status}` : ''} ${item.tem_avaria ? 'tem-avaria' : ''}" 
+                         id="item-${item.item_id}" 
+                         data-inspecao="${inspecaoId}">
+                        <h4>${item.nome} ${item.tem_avaria ? '<span class="avaria-indicator">⚠️ Avaria</span>' : ''}</h4>
                         ${item.descricao ? `<p>${item.descricao}</p>` : ''}
                         
                         ${item.criterios && item.criterios.length > 0 ? `
@@ -685,60 +741,179 @@ async function iniciarInspecao(checklistId) {
                             </div>
                         ` : ''}
                         
-                        <button onclick="abrirScanner(${item.item_id})" class="btn-primary">
-                            Escanear QR Code
+                        <button onclick="abrirScanner(${item.item_id})" class="btn-primary" ${item.status ? 'disabled' : ''}>
+                            ${item.qr_code_lido ? '✓ QR Code Escaneado' : 'Escanear QR Code'}
                         </button>
+                        
                         <div class="status-buttons" style="${item.status ? 'display: flex;' : 'display: none;'}" id="status-${item.item_id}">
-                            <button onclick="marcarStatus(${item.item_id}, 'ok')" class="status-ok">
+                            <button onclick="marcarStatus(${item.item_id}, 'ok')" 
+                                    class="status-ok ${item.status === 'ok' ? 'active' : ''}">
                                 ✓ OK
                             </button>
-                            <button onclick="marcarStatus(${item.item_id}, 'problema')" class="status-problem">
+                            <button onclick="marcarStatus(${item.item_id}, 'problema')" 
+                                    class="status-problem ${item.status === 'problema' ? 'active' : ''}">
                                 ✗ Com Problema
                             </button>
                         </div>
+                        
                         <div id="observacao-${item.item_id}" style="display: block; margin-top: 10px;">
                             <textarea placeholder="Observações..." rows="3" style="width: 100%">${item.observacoes || ''}</textarea>
                         </div>
                         
-                        <div class="avaria-container" id="avaria-${item.item_id}">
+                        <div class="avaria-container" id="avaria-${item.item_id}" style="${item.status === 'problema' ? 'display: block;' : 'display: none;'}">
                             <h4>Registrar Avaria</h4>
                             <div class="form-group">
                                 <label>Observações sobre a avaria:</label>
-                                <textarea id="avaria-obs-${item.item_id}" placeholder="Descreva detalhadamente a avaria encontrada..." rows="3" style="width: 100%;"></textarea>
+                                <textarea id="avaria-obs-${item.item_id}" 
+                                          placeholder="Descreva detalhadamente a avaria encontrada..." 
+                                          rows="3" 
+                                          style="width: 100%;"></textarea>
                             </div>
                             <div class="form-group">
                                 <label>Fotos da avaria:</label>
-                                <input type="file" id="avaria-foto-${item.item_id}" accept="image/*" multiple style="display: none;" onchange="previewFotos(${item.item_id})">
-                                <button type="button" onclick="document.getElementById('avaria-foto-${item.item_id}').click()" class="btn-secondary">
+                                <input type="file" 
+                                       id="avaria-foto-${item.item_id}" 
+                                       accept="image/*" 
+                                       multiple 
+                                       style="display: none;" 
+                                       onchange="previewFotos(${item.item_id})">
+                                <button type="button" 
+                                        onclick="document.getElementById('avaria-foto-${item.item_id}').click()" 
+                                        class="btn-upload-foto">
                                     📷 Adicionar Fotos
                                 </button>
                                 <div id="preview-fotos-${item.item_id}" class="foto-preview-container">
                                     <!-- Fotos serão mostradas aqui -->
                                 </div>
                             </div>
-                            <button type="button" onclick="salvarAvaria(${item.item_id})" class="btn-primary" style="margin-top: 10px;">
+                            <button type="button" 
+                                    onclick="salvarAvaria(${item.item_id})" 
+                                    class="btn-primary" 
+                                    style="margin-top: 10px;">
                                 Salvar Avaria
                             </button>
                         </div>
                     </div>
                 `).join('')}
-                <button onclick="finalizarInspecao(${inspecaoId})" class="btn-success" style="margin-top: 20px;">
-                    Finalizar Inspeção
-                </button>
+                
+                <div style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 20px;">
+                    <div class="form-group">
+                        <label><strong>Observações Gerais da Inspeção:</strong></label>
+                        <textarea id="observacoes-gerais" 
+                                  placeholder="Adicione observações gerais sobre toda a inspeção..." 
+                                  rows="4" 
+                                  style="width: 100%;"></textarea>
+                    </div>
+                    
+                    <button onclick="finalizarInspecao(${inspecaoId})" 
+                            class="btn-success" 
+                            style="width: 100%; padding: 15px; font-size: 18px;">
+                        ✓ Finalizar Inspeção
+                    </button>
+                </div>
             `;
 
-            // Carregar avarias existentes
-            for (const item of itens) {
-                if (item.status) {
-                    carregarAvaria(inspecaoId, item.item_id);
-                }
-            }
             document.getElementById('inspecaoContent').innerHTML = html;
             showModal('modalInspecao');
+            
+            // Carregar avarias existentes para itens já verificados
+            for (const item of itens) {
+                if (item.status) {
+                    // Habilitar checkboxes para itens já verificados
+                    document.querySelectorAll(`#item-${item.item_id} .criterio-checkbox`).forEach(cb => {
+                        cb.disabled = false;
+                    });
+                    
+                    // Carregar avarias se houver
+                    if (item.tem_avaria) {
+                        await carregarAvaria(inspecaoId, item.item_id);
+                    }
+                }
+            }
+            
+            // Adicionar event listener para mostrar/ocultar container de avaria
+            document.querySelectorAll('.status-buttons button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const itemId = this.closest('.checklist-item').id.split('-')[1];
+                    const avariaContainer = document.getElementById(`avaria-${itemId}`);
+                    
+                    if (this.classList.contains('status-problem')) {
+                        avariaContainer.style.display = 'block';
+                    } else {
+                        avariaContainer.style.display = 'none';
+                    }
+                });
+            });
+            
+            // Auto-save das observações
+            let saveTimeout;
+            document.querySelectorAll('textarea[id^="observacao-"]').forEach(textarea => {
+                textarea.addEventListener('input', function() {
+                    clearTimeout(saveTimeout);
+                    const itemId = this.id.split('-')[1];
+                    const itemEl = document.getElementById(`item-${itemId}`);
+                    
+                    // Só salva automaticamente se o item já foi verificado
+                    if (itemEl.classList.contains('status-ok') || itemEl.classList.contains('status-problem')) {
+                        saveTimeout = setTimeout(() => {
+                            salvarObservacaoItem(itemId);
+                        }, 2000); // Salva após 2 segundos de inatividade
+                    }
+                });
+            });
+            
+        } else {
+            throw new Error('Erro ao carregar itens do checklist');
         }
     } catch (error) {
         console.error('Erro ao iniciar inspeção:', error);
-        alert('Erro ao carregar inspeção');
+        alert('Erro ao carregar inspeção: ' + error.message);
+        pararMonitoramentoLocalizacao();
+        mostrarIndicadorGPS(false);
+    }
+}
+
+// Função auxiliar para salvar apenas observações de um item
+async function salvarObservacaoItem(itemId) {
+    const item = document.getElementById(`item-${itemId}`);
+    const inspecaoId = item.dataset.inspecao;
+    const status = item.classList.contains('status-ok') ? 'ok' : 
+                   item.classList.contains('status-problem') ? 'problema' : null;
+    
+    if (!status) return;
+    
+    const observacoes = document.querySelector(`#observacao-${itemId} textarea`)?.value || '';
+    
+    try {
+        // Obter localização atual se disponível
+        let localizacao = null;
+        if (localizacaoAtual) {
+            localizacao = { ...localizacaoAtual };
+        }
+        
+        // Coletar critérios marcados
+        const criteriosChecados = {};
+        document.querySelectorAll(`#item-${itemId} .criterio-checkbox`).forEach(cb => {
+            criteriosChecados[cb.dataset.criterioId] = cb.checked;
+        });
+        
+        await fetch('api/inspecoes.php', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                inspecao_id: inspecaoId,
+                item_id: itemId,
+                status: status,
+                observacoes: observacoes,
+                qr_code_lido: true,
+                criterios_checados: criteriosChecados,
+                localizacao: localizacao
+            })
+        });
+        
+        console.log(`Observações do item ${itemId} salvas automaticamente`);
+    } catch (error) {
+        console.error('Erro ao salvar observações:', error);
     }
 }
 
@@ -827,6 +1002,14 @@ async function marcarStatus(itemId, status) {
     const item = document.getElementById(`item-${itemId}`);
     const inspecaoId = item.dataset.inspecao;
     
+    // Obter localização atual
+    let localizacao = null;
+    try {
+        localizacao = await obterLocalizacao();
+    } catch (error) {
+        console.warn('Não foi possível obter localização para este item');
+    }
+
     item.classList.remove('status-ok', 'status-problem');
     item.classList.add(`status-${status}`);
     
@@ -836,7 +1019,7 @@ async function marcarStatus(itemId, status) {
         criteriosChecados[cb.dataset.criterioId] = cb.checked;
     });
     
-    // Salvar status
+    // Salvar status com localização
     try {
         const observacoes = document.querySelector(`#observacao-${itemId} textarea`)?.value || '';
         
@@ -849,7 +1032,8 @@ async function marcarStatus(itemId, status) {
                 status: status,
                 observacoes: observacoes,
                 qr_code_lido: true,
-                criterios_checados: criteriosChecados
+                criterios_checados: criteriosChecados,
+                localizacao: localizacao
             })
         });
     } catch (error) {
@@ -858,6 +1042,18 @@ async function marcarStatus(itemId, status) {
 }
 
 async function finalizarInspecao(inspecaoId) {
+    // Parar monitoramento de localização
+    pararMonitoramentoLocalizacao();
+    mostrarIndicadorGPS(false);
+    
+    // Obter localização final
+    let localizacaoFinal = null;
+    try {
+        localizacaoFinal = await obterLocalizacao();
+    } catch (error) {
+        console.warn('Não foi possível obter localização final');
+    }
+
     const itens = document.querySelectorAll('.checklist-item');
     const resultados = [];
 
@@ -890,7 +1086,8 @@ async function finalizarInspecao(inspecaoId) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 inspecao_id: inspecaoId,
-                resultados: resultados
+                resultados: resultados,
+                localizacao_final: localizacaoFinal
             })
         });
 
@@ -907,6 +1104,74 @@ async function finalizarInspecao(inspecaoId) {
         alert('Erro ao finalizar inspeção');
     }
 }
+
+
+// Função para mostrar indicador de GPS
+function mostrarIndicadorGPS(ativo) {
+    let indicador = document.getElementById('gps-indicator');
+    
+    if (!indicador) {
+        indicador = document.createElement('div');
+        indicador.id = 'gps-indicator';
+        indicador.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: ${ativo ? '#2ecc71' : '#e74c3c'};
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(indicador);
+    }
+    
+    indicador.innerHTML = `
+        <span style="display: inline-block; width: 10px; height: 10px; background: white; border-radius: 50%; ${ativo ? 'animation: pulse 1.5s infinite;' : ''}"></span>
+        GPS ${ativo ? 'Ativo' : 'Inativo'}
+    `;
+    
+    indicador.style.background = ativo ? '#2ecc71' : '#e74c3c';
+    indicador.style.display = ativo ? 'flex' : 'none';
+}
+
+// Adicionar CSS para animação do indicador GPS
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% {
+            opacity: 1;
+            transform: scale(1);
+        }
+        50% {
+            opacity: 0.5;
+            transform: scale(1.2);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    
+    .localizacao-info {
+        background: #e7f3ff;
+        border: 1px solid #b8daff;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    
+    .localizacao-info strong {
+        color: #004085;
+    }
+`;
+document.head.appendChild(style);
 
 // Função para carregar lista de inspeções (admin)
 async function carregarInspecoes() {
@@ -996,9 +1261,22 @@ async function visualizarInspecao(inspecaoId) {
             const resumo = data.resumo;
             const itens = data.itens;
             
+            // Calcular duração
             const duracaoText = inspecao.duracao 
                 ? `${inspecao.duracao.horas}h ${inspecao.duracao.minutos}min`
                 : 'Em andamento';
+            
+            // Criar mapa se houver coordenadas
+            let mapaHtml = '';
+            if (inspecao.latitude && inspecao.longitude) {
+                const mapId = `map-${inspecaoId}`;
+                mapaHtml = `
+                    <div class="mapa-container" style="margin-top: 20px;">
+                        <h4>Localização da Inspeção</h4>
+                        <div id="${mapId}" style="height: 300px; border: 1px solid #ddd; border-radius: 8px;"></div>
+                    </div>
+                `;
+            }
             
             const html = `
                 <div class="inspecao-header">
@@ -1009,7 +1287,7 @@ async function visualizarInspecao(inspecaoId) {
                             <span class="info-value">${inspecao.armazem.nome} (${inspecao.armazem.codigo})</span>
                         </div>
                         <div class="info-item">
-                            <span class="info-label">Localização</span>
+                            <span class="info-label">Localização do Armazém</span>
                             <span class="info-value">${inspecao.armazem.localizacao}</span>
                         </div>
                         <div class="info-item">
@@ -1036,6 +1314,30 @@ async function visualizarInspecao(inspecaoId) {
                             <span class="info-label">Periodicidade</span>
                             <span class="info-value">${capitalize(inspecao.periodicidade)}</span>
                         </div>
+                        ${inspecao.latitude && inspecao.longitude ? `
+                            <div class="info-item">
+                                <span class="info-label">Coordenadas GPS</span>
+                                <span class="info-value">
+                                    <a href="https://maps.google.com/?q=${inspecao.latitude},${inspecao.longitude}" 
+                                       target="_blank" 
+                                       style="color: #3498db; text-decoration: none;">
+                                        📍 ${inspecao.latitude}, ${inspecao.longitude}
+                                    </a>
+                                </span>
+                            </div>
+                        ` : ''}
+                        ${inspecao.endereco_aproximado ? `
+                            <div class="info-item">
+                                <span class="info-label">Endereço Aproximado</span>
+                                <span class="info-value">${inspecao.endereco_aproximado}</span>
+                            </div>
+                        ` : ''}
+                        ${inspecao.precisao_metros ? `
+                            <div class="info-item">
+                                <span class="info-label">Precisão do GPS</span>
+                                <span class="info-value">±${Math.round(inspecao.precisao_metros)}m</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
                 
@@ -1056,84 +1358,160 @@ async function visualizarInspecao(inspecaoId) {
                         <div class="resumo-numero" style="color: #3498db;">${resumo.taxa_conformidade}%</div>
                         <div class="resumo-label">Conformidade</div>
                     </div>
-                    <div class="resumo-item">
-                        <div class="resumo-numero" style="color: #f39c12;">${resumo.total_avarias || 0}</div>
-                        <div class="resumo-label">Avarias</div>
-                    </div>
+                    ${resumo.total_avarias > 0 ? `
+                        <div class="resumo-item">
+                            <div class="resumo-numero" style="color: #f39c12;">${resumo.total_avarias}</div>
+                            <div class="resumo-label">Avarias</div>
+                        </div>
+                    ` : ''}
                 </div>
+                
+                ${mapaHtml}
                 
                 <div class="itens-inspecionados">
                     <h4>Itens Inspecionados</h4>
-                    ${itens.map(item => `
+                    ${itens.map((item, index) => `
                         <div class="item-resultado ${item.status} ${item.tem_avaria ? 'tem-avaria' : ''}">
                             <div class="item-info" style="flex: 1;">
-                                <h4>${item.item_nome} ${item.tem_avaria ? '<span class="avaria-indicator">⚠️ Avaria</span>' : ''}</h4>
-                                ${item.item_descricao ? `<p>${item.item_descricao}</p>` : ''}
-                                ${item.criterios_inspecao ? `<p><strong>Critérios:</strong> ${item.criterios_inspecao}</p>` : ''}
-                                <p class="qr-indicator">
-                                    ${item.qr_code_lido ? '✓ QR Code escaneado' : '⚠ QR Code não escaneado'}
-                                </p>
-                                ${item.observacoes ? `
-                                    <div class="observacoes-box">
-                                        <strong>Observações:</strong> ${item.observacoes}
+                                <h4>
+                                    ${item.item_nome} 
+                                    ${item.tem_avaria ? '<span class="avaria-indicator">⚠️ Avaria Registrada</span>' : ''}
+                                </h4>
+                                ${item.item_descricao ? `<p><em>${item.item_descricao}</em></p>` : ''}
+                                
+                                ${item.criterios_inspecao ? `
+                                    <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                                        <strong>Critérios de Inspeção:</strong>
+                                        <p style="margin: 5px 0;">${item.criterios_inspecao}</p>
                                     </div>
                                 ` : ''}
+                                
+                                <div style="display: flex; gap: 20px; margin: 10px 0; font-size: 14px;">
+                                    <span class="qr-indicator" style="color: ${item.qr_code_lido ? '#2ecc71' : '#e74c3c'};">
+                                        ${item.qr_code_lido ? '✓ QR Code escaneado' : '⚠ QR Code não escaneado'}
+                                    </span>
+                                    ${item.data_verificacao ? `
+                                        <span style="color: #7f8c8d;">
+                                            ⏰ ${formatarDataHora(item.data_verificacao)}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                
+                                ${item.latitude && item.longitude ? `
+                                    <div class="localizacao-info" style="margin: 10px 0;">
+                                        <strong>📍 Local da verificação:</strong>
+                                        <a href="https://maps.google.com/?q=${item.latitude},${item.longitude}" 
+                                           target="_blank" 
+                                           style="color: #3498db; text-decoration: none;">
+                                            ${item.latitude}, ${item.longitude}
+                                        </a>
+                                        ${item.data_geolocalizacao ? `
+                                            <span style="color: #7f8c8d; font-size: 12px;">
+                                                (${formatarDataHora(item.data_geolocalizacao)})
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                                
+                                ${item.observacoes ? `
+                                    <div class="observacoes-box">
+                                        <strong>Observações:</strong>
+                                        <p style="margin: 5px 0;">${item.observacoes}</p>
+                                    </div>
+                                ` : ''}
+                                
                                 ${item.tem_avaria && item.avaria ? `
-                                    <div class="avaria-info" style="margin-top: 10px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
-                                        <h5 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">🔧 Detalhes da Avaria</h5>
+                                    <div class="avaria-info" style="margin-top: 15px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+                                        <h5 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">
+                                            🔧 Detalhes da Avaria
+                                        </h5>
+                                        
                                         ${item.avaria.observacoes ? `
                                             <div style="margin: 10px 0;">
                                                 <strong>Descrição da avaria:</strong>
                                                 <p style="margin: 5px 0; color: #856404;">${item.avaria.observacoes}</p>
                                             </div>
                                         ` : ''}
+                                        
                                         ${item.avaria.fotos && item.avaria.fotos.length > 0 ? `
                                             <div style="margin-top: 15px;">
                                                 <strong>Fotos da avaria (${item.avaria.fotos.length}):</strong>
                                                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
-                                                    ${item.avaria.fotos.map((foto, index) => `
+                                                    ${item.avaria.fotos.map((foto, fotoIndex) => `
                                                         <div style="position: relative;">
                                                             <img src="${foto.url}" 
                                                                  style="width: 120px; height: 120px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid #ffeaa7; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" 
-                                                                 onclick="abrirModalFoto('${foto.url}', '${item.item_nome} - Foto ${index + 1}')"
-                                                                 title="Clique para ampliar">
+                                                                 onclick="abrirModalFoto('${foto.url}', '${item.item_nome} - Foto ${fotoIndex + 1}')"
+                                                                 title="Clique para ampliar"
+                                                                 alt="Foto ${fotoIndex + 1} da avaria">
                                                         </div>
                                                     `).join('')}
                                                 </div>
                                             </div>
                                         ` : ''}
+                                        
+                                        ${item.avaria.criado_em ? `
+                                            <div style="margin-top: 10px; font-size: 12px; color: #856404;">
+                                                <em>Registrado em: ${formatarDataHora(item.avaria.criado_em)}</em>
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 ` : ''}
                             </div>
-                            <div class="item-status" style="min-width: 100px; text-align: center;">
-                                <span class="status-badge ${item.status}">
+                            
+                            <div class="item-status" style="min-width: 120px; text-align: center;">
+                                <span class="status-badge ${item.status}" style="font-size: 16px; padding: 8px 16px;">
                                     ${item.status === 'ok' ? '✓ OK' : '✗ Problema'}
                                 </span>
                             </div>
                         </div>
                     `).join('')}
+                    
+                    ${itens.length === 0 ? `
+                        <div class="alert alert-info">
+                            Nenhum item foi inspecionado.
+                        </div>
+                    ` : ''}
                 </div>
                 
                 ${inspecao.observacoes_gerais ? `
                     <div class="observacoes-gerais">
-                        <h4>Observações Gerais</h4>
+                        <h4>Observações Gerais da Inspeção</h4>
                         <p>${inspecao.observacoes_gerais}</p>
                     </div>
                 ` : ''}
                 
-                <button onclick="imprimirInspecao()" class="btn-imprimir" style="margin-top: 20px;">
-                    🖨️ Imprimir Relatório
-                </button>
+                <div style="margin-top: 30px; display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="imprimirInspecao()" class="btn-imprimir">
+                        🖨️ Imprimir Relatório
+                    </button>
+                    <button onclick="exportarInspecaoPDF(${inspecaoId})" class="btn-secondary">
+                        📄 Exportar PDF
+                    </button>
+                    <button onclick="compartilharInspecao(${inspecaoId})" class="btn-primary">
+                        📤 Compartilhar
+                    </button>
+                </div>
             `;
             
             document.getElementById('detalhesInspecao').innerHTML = html;
             showModal('modalVisualizarInspecao');
+            
+            // Se houver coordenadas, criar mapa interativo
+            if (inspecao.latitude && inspecao.longitude) {
+                setTimeout(() => {
+                    criarMapaInspecao(`map-${inspecaoId}`, inspecao, itens);
+                }, 500);
+            }
+        } else {
+            throw new Error(result.message || 'Erro ao carregar detalhes');
         }
     } catch (error) {
         console.error('Erro ao carregar detalhes da inspeção:', error);
-        alert('Erro ao carregar detalhes da inspeção');
+        alert('Erro ao carregar detalhes da inspeção: ' + error.message);
     }
 }
+
 
 // Função para abrir modal de foto ampliada
 function abrirModalFoto(url, titulo) {
@@ -1697,6 +2075,76 @@ function atualizarFiltrosInspecao(inspecoes) {
         });
     }
 }
+
+// Função para obter a localização atual
+async function obterLocalizacao() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error('Geolocalização não suportada pelo navegador'));
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                const localizacao = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    precisao: position.coords.accuracy,
+                    timestamp: new Date().toISOString()
+                };
+                localizacaoAtual = localizacao;
+                resolve(localizacao);
+            },
+            error => {
+                console.error('Erro ao obter localização:', error);
+                reject(error);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    });
+}
+
+// Função para iniciar monitoramento de localização
+function iniciarMonitoramentoLocalizacao() {
+    if (!navigator.geolocation) {
+        console.warn('Geolocalização não suportada');
+        return;
+    }
+    
+    watchId = navigator.geolocation.watchPosition(
+        position => {
+            localizacaoAtual = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                precisao: position.coords.accuracy,
+                timestamp: new Date().toISOString()
+            };
+            console.log('Localização atualizada:', localizacaoAtual);
+        },
+        error => {
+            console.error('Erro no monitoramento de localização:', error);
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 30000,
+            timeout: 27000
+        }
+    );
+}
+
+// Função para parar monitoramento
+function pararMonitoramentoLocalizacao() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+}
+
+
 
 // Fechar modais ao clicar fora
 window.onclick = function(event) {

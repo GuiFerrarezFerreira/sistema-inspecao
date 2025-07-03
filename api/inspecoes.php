@@ -157,18 +157,43 @@ function iniciarInspecao() {
             return;
         }
         
-        // Criar nova inspeção
-        $query = "INSERT INTO inspecoes (checklist_id, funcionario_id, data_inicio, status) 
-                  VALUES (:checklist_id, :funcionario_id, NOW(), 'em_andamento')";
+        // Extrair dados de localização se disponíveis
+        $latitude = null;
+        $longitude = null;
+        $precisao = null;
+        $endereco = null;
+        
+        if (isset($data->localizacao)) {
+            $latitude = $data->localizacao->latitude ?? null;
+            $longitude = $data->localizacao->longitude ?? null;
+            $precisao = $data->localizacao->precisao ?? null;
+            
+            // Opcionalmente, fazer geocoding reverso para obter endereço
+            if ($latitude && $longitude) {
+                $endereco = obterEnderecoAproximado($latitude, $longitude);
+            }
+        }
+        
+        // Criar nova inspeção com geolocalização
+        $query = "INSERT INTO inspecoes (checklist_id, funcionario_id, data_inicio, status, 
+                                       latitude, longitude, precisao_metros, endereco_aproximado) 
+                  VALUES (:checklist_id, :funcionario_id, NOW(), 'em_andamento',
+                         :latitude, :longitude, :precisao, :endereco)";
         
         $stmt = $db->prepare($query);
         $stmt->bindParam(":checklist_id", $data->checklist_id);
         $stmt->bindParam(":funcionario_id", $usuario_id);
+        $stmt->bindParam(":latitude", $latitude);
+        $stmt->bindParam(":longitude", $longitude);
+        $stmt->bindParam(":precisao", $precisao);
+        $stmt->bindParam(":endereco", $endereco);
         
         if ($stmt->execute()) {
             $inspecao_id = $db->lastInsertId();
             
-            registrarLog($db, $usuario_id, 'INICIAR_INSPECAO', 'Inspeção iniciada', 'inspecoes', $inspecao_id);
+            registrarLog($db, $usuario_id, 'INICIAR_INSPECAO', 
+                        'Inspeção iniciada' . ($latitude ? ' - Lat: ' . $latitude . ', Lng: ' . $longitude : ''), 
+                        'inspecoes', $inspecao_id);
             
             enviarResposta(true, "Inspeção iniciada com sucesso", array("inspecao_id" => $inspecao_id));
         } else {
@@ -251,6 +276,17 @@ function atualizarItemInspecao() {
             throw new Exception("Inspeção não encontrada ou não pertence ao usuário");
         }
         
+        // Extrair dados de localização
+        $latitude = null;
+        $longitude = null;
+        $data_geolocalizacao = null;
+        
+        if (isset($data->localizacao)) {
+            $latitude = $data->localizacao->latitude ?? null;
+            $longitude = $data->localizacao->longitude ?? null;
+            $data_geolocalizacao = date('Y-m-d H:i:s');
+        }
+                
         $db->beginTransaction();
         
         // Verificar se já existe resultado para este item
@@ -269,14 +305,18 @@ function atualizarItemInspecao() {
             // Atualizar resultado existente
             $query = "UPDATE inspecao_resultados 
                       SET status = :status, observacoes = :observacoes, 
-                          data_verificacao = NOW(), qr_code_lido = :qr_code_lido 
+                          data_verificacao = NOW(), qr_code_lido = :qr_code_lido,
+                          latitude = :latitude, longitude = :longitude, 
+                          data_geolocalizacao = :data_geolocalizacao
                       WHERE inspecao_id = :inspecao_id AND item_id = :item_id";
         } else {
             // Criar novo resultado
             $query = "INSERT INTO inspecao_resultados 
-                      (inspecao_id, item_id, status, observacoes, data_verificacao, qr_code_lido) 
+                      (inspecao_id, item_id, status, observacoes, data_verificacao, qr_code_lido,
+                       latitude, longitude, data_geolocalizacao) 
                       VALUES 
-                      (:inspecao_id, :item_id, :status, :observacoes, NOW(), :qr_code_lido)";
+                      (:inspecao_id, :item_id, :status, :observacoes, NOW(), :qr_code_lido,
+                       :latitude, :longitude, :data_geolocalizacao)";
         }
         
         $stmt = $db->prepare($query);
@@ -285,6 +325,9 @@ function atualizarItemInspecao() {
         $stmt->bindParam(":status", $data->status);
         $stmt->bindParam(":observacoes", $observacoes);
         $stmt->bindParam(":qr_code_lido", $qr_code_lido, PDO::PARAM_BOOL);
+        $stmt->bindParam(":latitude", $latitude);
+        $stmt->bindParam(":longitude", $longitude);
+        $stmt->bindParam(":data_geolocalizacao", $data_geolocalizacao);
         
         if ($stmt->execute()) {
             // Salvar critérios marcados
@@ -414,21 +457,46 @@ function finalizarInspecao() {
             throw new Exception("Nenhum item foi inspecionado. Por favor, inspecione pelo menos um item antes de finalizar.");
         }
         
-        // Finalizar inspeção
+        // Extrair localização final se disponível
+        $latitude_final = null;
+        $longitude_final = null;
+        
+        if (isset($data->localizacao_final)) {
+            $latitude_final = $data->localizacao_final->latitude ?? null;
+            $longitude_final = $data->localizacao_final->longitude ?? null;
+        }
+        
+        // Finalizar inspeção com localização final
         $observacoes_gerais = isset($data->observacoes_gerais) ? $data->observacoes_gerais : null;
         
         $query_finalizar = "UPDATE inspecoes 
-                           SET status = 'concluida', data_fim = NOW(), observacoes_gerais = :observacoes 
-                           WHERE id = :inspecao_id";
+                           SET status = 'concluida', 
+                               data_fim = NOW(), 
+                               observacoes_gerais = :observacoes";
+        
+        // Adicionar campos de localização apenas se foram fornecidos
+        if ($latitude_final && $longitude_final) {
+            $query_finalizar .= ", latitude = :latitude, longitude = :longitude";
+        }
+        
+        $query_finalizar .= " WHERE id = :inspecao_id";
         
         $stmt_finalizar = $db->prepare($query_finalizar);
         $stmt_finalizar->bindParam(":observacoes", $observacoes_gerais);
         $stmt_finalizar->bindParam(":inspecao_id", $data->inspecao_id);
+        
+        if ($latitude_final && $longitude_final) {
+            $stmt_finalizar->bindParam(":latitude", $latitude_final);
+            $stmt_finalizar->bindParam(":longitude", $longitude_final);
+        }
+        
         $stmt_finalizar->execute();
         
         $db->commit();
         
-        registrarLog($db, $usuario_id, 'FINALIZAR_INSPECAO', 'Inspeção finalizada', 'inspecoes', $data->inspecao_id);
+        registrarLog($db, $usuario_id, 'FINALIZAR_INSPECAO', 
+                    'Inspeção finalizada' . ($latitude_final ? ' - Lat: ' . $latitude_final . ', Lng: ' . $longitude_final : ''), 
+                    'inspecoes', $data->inspecao_id);
         
         enviarResposta(true, "Inspeção finalizada com sucesso");
         
