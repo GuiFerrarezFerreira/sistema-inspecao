@@ -118,7 +118,7 @@ function listarChecklistsFuncionario($funcionario_id) {
               LEFT JOIN checklist_itens ci ON c.id = ci.checklist_id
               LEFT JOIN inspecoes i ON c.id = i.checklist_id 
                     AND i.funcionario_id = :funcionario_id 
-                    AND i.status = 'em_andamento'
+                    /* AND i.status = 'em_andamento' */
               WHERE cr.funcionario_id = :funcionario_id AND c.ativo = TRUE
               GROUP BY c.id
               ORDER BY c.nome";
