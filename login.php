@@ -142,11 +142,6 @@ if (isset($_SESSION['usuario_id'])) {
             <button type="submit">Entrar</button>
         </form>
         
-        <div class="demo-info">
-            <h4>Usuários de demonstração:</h4>
-            <p><strong>Admin:</strong> admin / admin123</p>
-            <p><strong>Funcionário:</strong> func / func123</p>
-        </div>
     </div>
 </body>
 </html>
