@@ -884,11 +884,6 @@ async function finalizarInspecao(inspecaoId) {
         }
     });
 
-    if (resultados.length === 0) {
-        alert('Por favor, inspecione pelo menos um item!');
-        return;
-    }
-
     try {
         const response = await fetch('api/inspecoes.php', {
             method: 'POST',

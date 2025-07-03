@@ -1,4 +1,5 @@
 <?php
+// logout.php
 session_start();
 require_once 'config/database.php';
 require_once 'helpers/log.php';
@@ -7,7 +8,16 @@ if (isset($_SESSION['usuario_id'])) {
     $database = new Database();
     $db = $database->getConnection();
     
-    registrarLog($db, $_SESSION['usuario_id'], 'LOGOUT', 'Usuário realizou logout do sistema');
+    // Verificar se o usuário ainda existe no banco antes de registrar o log
+    $query = "SELECT id FROM usuarios WHERE id = :usuario_id";
+    $stmt = $db->prepare($query);
+    $stmt->bindParam(":usuario_id", $_SESSION['usuario_id']);
+    $stmt->execute();
+    
+    // Só registra o log se o usuário existir
+    if ($stmt->rowCount() > 0) {
+        registrarLog($db, $_SESSION['usuario_id'], 'LOGOUT', 'Usuário realizou logout do sistema');
+    }
 }
 
 // Destruir todas as variáveis de sessão
