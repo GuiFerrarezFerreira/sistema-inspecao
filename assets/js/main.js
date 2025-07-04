@@ -1497,12 +1497,6 @@ async function visualizarInspecao(inspecaoId) {
             document.getElementById('detalhesInspecao').innerHTML = html;
             showModal('modalVisualizarInspecao');
             
-            // Se houver coordenadas, criar mapa interativo
-            if (inspecao.latitude && inspecao.longitude) {
-                setTimeout(() => {
-                    criarMapaInspecao(`map-${inspecaoId}`, inspecao, itens);
-                }, 500);
-            }
         } else {
             throw new Error(result.message || 'Erro ao carregar detalhes');
         }
